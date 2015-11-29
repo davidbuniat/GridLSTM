@@ -6,11 +6,13 @@ sum of two numbers in a sequence of random numbers sampled uniformly from
 [0, 1] based on a separate marker sequence.
 '''
 
+
 #THEANO_FLAGS=device=gpu python -c "import theano; print theano.sandbox.cuda.device_properties(0)"
 
 from __future__ import print_function
 
 import scipy
+
 
 import numpy as np
 import theano
@@ -146,7 +148,7 @@ def saveImage(Y, name):
 MIN_LENGTH = 50
 MAX_LENGTH = 19200
 # Number of units in the hidden (recurrent) layer
-N_HIDDEN = 4
+N_HIDDEN = 400
 # Number of training sequences in each batch
 N_BATCH = 250
 # Optimization learning rate
@@ -189,20 +191,12 @@ def main(num_epochs=NUM_EPOCHS):
         l_in, N_HIDDEN, grad_clipping=GRAD_CLIP,
         nonlinearity=lasagne.nonlinearities.tanh)
 
-    l_forward_2 = lasagne.layers.LSTMLayer(
-        l_forward, N_HIDDEN, grad_clipping=GRAD_CLIP,
-        nonlinearity=lasagne.nonlinearities.tanh)
-
     l_backward = lasagne.layers.LSTMLayer(
         l_in, N_HIDDEN, grad_clipping=GRAD_CLIP,
         nonlinearity=lasagne.nonlinearities.tanh, backwards=True)
 
-    l_backward_2 = lasagne.layers.LSTMLayer(
-        l_backward, N_HIDDEN, grad_clipping=GRAD_CLIP,
-        nonlinearity=lasagne.nonlinearities.tanh, backwards=True)
 
-
-    l_recurrent = lasagne.layers.ElemwiseSumLayer([l_forward_2, l_backward_2])
+    l_recurrent = lasagne.layers.ElemwiseSumLayer([l_forward, l_backward])
 
     l_reshape = lasagne.layers.ReshapeLayer(l_recurrent,
                                        (batchsize*seqlen, N_HIDDEN))

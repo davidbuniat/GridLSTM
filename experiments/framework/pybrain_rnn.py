@@ -2,8 +2,6 @@ from __future__ import print_function
 
 #!/usr/bin/env python
 # Example script for recurrent network usage in PyBrain.
-__author__ = "Martin Felder"
-__version__ = '$Id$'
 
 from pylab import plot, hold, show
 from scipy import sin, rand, arange

@@ -2,8 +2,7 @@ from __future__ import print_function
 
 #!/usr/bin/env python
 # Example script for recurrent network usage in PyBrain.
-__author__ = "Martin Felder"
-__version__ = '$Id$'
+
 
 from pylab import plot, hold, show
 from scipy import sin, rand, arange
@@ -159,7 +158,7 @@ tstdata = SequenceClassificationDataSet(X_test, Y_test)
 
 # construct LSTM network - note the missing output bias
 
-rnn = buildNetwork( trndata.indim, 5, trndata.outdim, hiddenclass=LSTMLayer, outclass=SoftmaxLayer, outclass=SoftmaxLayer )
+rnn = buildNetwork( trndata.indim, (), trndata.outdim, hiddenclass=LSTMLayer, outclass=SoftmaxLayer, outclass=SoftmaxLayer )
 
 #buildNetwork( MultiDimensionalLSTM
 #rnn.addInputModule(LinearLayer(3, name='in'))
