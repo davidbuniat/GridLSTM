@@ -15,22 +15,23 @@ import itertools
 import data as dt
 
 #Parameters
-DEBUG = True
+DEBUG = False
 number_training = 455
 row_count = 120
 column_count = 160
 plane_count = 3
 
-
 # Min/max sequence length
 MIN_LENGTH = 50
 MAX_LENGTH = 19200
 # Number of units in the hidden (recurrent) layer
-N_HIDDEN = 4
+N_HIDDEN = 20
 # Number of training sequences in each batch
 N_BATCH = 10
 # Optimization learning rate
-LEARNING_RATE = .001
+LEARNING_RATE = 0.01
+MOMENTUM  = 0.9
+
 # All gradients above this will be clipped
 GRAD_CLIP = 100
 # How often should we check the output?
@@ -44,6 +45,7 @@ if DEBUG:
 
 BATCH_SIZE = 455
 length = 19200
+
 
 def main(num_epochs=NUM_EPOCHS):
     print("Building network ...")
@@ -62,16 +64,13 @@ def main(num_epochs=NUM_EPOCHS):
 
     l_recurrent = lasagne.layers.ElemwiseSumLayer([l_forward, l_backward])
 
-    l_reshape = lasagne.layers.ReshapeLayer(l_recurrent,
-                                       (batchsize*seqlen, N_HIDDEN ))
-
     softmax = lasagne.nonlinearities.softmax
 
-    l_rec_out = lasagne.layers.DenseLayer(l_reshape, num_units=1)
+    l_reshape = lasagne.layers.ReshapeLayer(l_recurrent,(-1, N_HIDDEN))
 
-    l_softmax = lasagne.layers.DenseLayer(l_rec_out, num_units=157, nonlinearity=softmax)
+    l_softmax = lasagne.layers.DenseLayer(l_reshape, num_units=2, nonlinearity = softmax)
 
-    l_out = lasagne.layers.ReshapeLayer(l_softmax, (batchsize, seqlen, 1)) 
+    l_out = lasagne.layers.ReshapeLayer(l_softmax, (batchsize, seqlen, 2)) 
 
     # Now, we'll concatenate the outputs to combine them.
     #l_sum = lasagne.layers.ConcatLayer([l_forward, l_backward], 2)
@@ -88,29 +87,36 @@ def main(num_epochs=NUM_EPOCHS):
     # lasagne.layers.get_output produces a variable for the output of the net
     network_output = lasagne.layers.get_output(l_out)
 
-    # The value we care about is the final value produced for each sequence
+    # The value we care about is the final value produced  for each sequence
+    #predicted_values = T.argmax(network_output, axis = 2, keepdims = True)
     predicted_values = network_output
 
     # Our cost will be mean-squared error
-    #cost = T.mean((predicted_values - target_values)**2)
-    cost = lasagne.objectives.categorical_crossentropy(predicted_values, target_values)
-    cost = cost.mean()
+    #cost = T.mean((T.argmax(predicted_values, axis = 2, keepdims = True) - target_values)**2)
+    cost = lasagne.objectives.squared_error(T.argmax(predicted_values, axis =2), target_values).mean()
+    #cost = cost.mean()
+
+    acc = T.mean(T.eq(T.argmax(predicted_values, axis =2), target_values),
+                      dtype=theano.config.floatX)
 
     # Retrieve all parameters from the network
     all_params = lasagne.layers.get_all_params(l_out)
 
     # Compute SGD updates for training
     print("Computing updates ...")
-    updates = lasagne.updates.nesterov_momentum(cost, all_params, LEARNING_RATE)
-    
+    updates = lasagne.updates.adagrad(cost, all_params, learning_rate=LEARNING_RATE)
+
     # Theano functions for training and computing cost
     print("Compiling functions ...")
     train = theano.function([l_in.input_var, target_values],
                             cost, updates=updates)
     compute_cost = theano.function(
         [l_in.input_var, target_values], cost)
+    compute_acc = theano.function(
+        [l_in.input_var, target_values], acc)
 
-    get_prediction = theano.function([l_in.input_var], predicted_values)
+    get_out = predicted_values
+    get_prediction = theano.function([l_in.input_var], get_out)
 
     # We'll use this "validation set" to periodically check progress
     X_train, y_train, X_val, y_val, X_test, y_test = dt.load_dataset(BATCH_SIZE, row_count, column_count, plane_count, DEBUG)
@@ -119,18 +125,20 @@ def main(num_epochs=NUM_EPOCHS):
     #print(get_prediction(X_train[0:1]))
 
     try:
-        index = 0
+        index = 0 #*len(dt.labels_rev)
+        dt.saveImage(y_test[0], "results/y_GT.png",row_count, column_count,  plane_count)
         for epoch in range(num_epochs):
             X = X_train[EPOCH_SIZE*epoch:EPOCH_SIZE*(epoch+1)]
             y = y_train[EPOCH_SIZE*epoch:EPOCH_SIZE*(epoch+1)]
             train(X, y)
 
             cost_val = compute_cost(X_val, y_val)
-            cost_test = compute_cost(X_test, y_test)
-            print("Epoch {} validation cost = {}  test cost = {} ".format(epoch, cost_val, cost_test))
+            cost_test = compute_acc(X_test, y_test)*100
+            print("Epoch {} validation cost = {}  test acc = {} %".format(epoch, cost_val, cost_test))
 
-        dt.saveImage(y_test[0], "results/y_GT.png",row_count, column_count,  plane_count)
-        dt.saveImage(get_prediction(X_test)[0], "results/y_output.png", row_count, column_count,  plane_count)
+            dt.saveImage(get_prediction(X_test)[0], "results/y_output_{}.png".format(epoch), row_count, column_count,  plane_count, True)
+
+        dt.saveImage(get_prediction(X_test)[0], "results/y_output.png", row_count, column_count,  plane_count, True)
 
     except KeyboardInterrupt:
         pass

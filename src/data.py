@@ -12,13 +12,18 @@ import png
 import os
 import random
 import itertools
-
+import lasagne
 
 labels = {}
 labels_rev = {}
 index_temp = 0
 mean = 0
 std = 0  
+def one_hot(x, m):
+    y = [0] * m
+    y[x] = 1
+    return y
+
 
 def load_dataset(number_training, row_count, column_count, plane_count, DEBUG):
     print ("Loading data...")
@@ -56,7 +61,11 @@ def load_dataset(number_training, row_count, column_count, plane_count, DEBUG):
     # We read the training and test set images and labels.
     X = load_images('/../datasets/afreightdata/data')
     Y = load_images('/../datasets/afreightdata/label')
-   
+    def one_hot(x, m):
+        y = np.zeros(m)
+        y[x] = 1
+        return y
+
     def labelling(y):
         new_y = np.empty((number_training, row_count*column_count, 1))
         index = 0
@@ -76,6 +85,8 @@ def load_dataset(number_training, row_count, column_count, plane_count, DEBUG):
 
         print("labels added " +str(index))
         new_y = new_y/np.float32(str(index))
+        #clearnew_y = lasagne.utils.one_hot(new_y)
+        #print(new_y)
         index_temp = index
           
         return new_y
@@ -101,10 +112,13 @@ def load_dataset(number_training, row_count, column_count, plane_count, DEBUG):
     print("Loaded "+str(len(X)) + " images")
     return X[train_array], Y[train_array], X[val_array], Y[val_array], X[test_array], Y[test_array]
 
-def saveImage(Y, name, row_count, column_count, plane_count):
+def saveImage(Y, name, row_count, column_count, plane_count, predicted=False):
     new_y = np.empty((row_count*column_count, plane_count))
     for i in range(len(new_y)):
-        new_y[i] = labels_rev[int(round(Y[i][0]*len(labels_rev))) ]
+        if predicted:
+            new_y[i] = labels_rev[int(round(Y[i]))]
+        else:
+            new_y[i] = labels_rev[int(round(Y[i]))]
     image = np.reshape(new_y, (row_count, column_count, plane_count))
     scipy.misc.imsave(name, image)
 

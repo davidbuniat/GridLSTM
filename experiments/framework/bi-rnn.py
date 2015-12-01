@@ -26,7 +26,7 @@ import random
 import itertools
 
 
-DEBUG = False
+DEBUG = True
 
 number_training = 455
 row_count = 120

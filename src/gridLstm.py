@@ -10,6 +10,67 @@ from .input import InputLayer
 from .dense import DenseLayer
 from . import helper
 
+
+class Gate(object):
+    """
+    lasagne.layers.recurrent.Gate(W_in=lasagne.init.Normal(0.1),
+    W_hid=lasagne.init.Normal(0.1), W_cell=lasagne.init.Normal(0.1),
+    b=lasagne.init.Constant(0.), nonlinearity=lasagne.nonlinearities.sigmoid)
+
+    Simple class to hold the parameters for a gate connection.  We define
+    a gate loosely as something which computes the linear mix of two inputs,
+    optionally computes an element-wise product with a third, adds a bias, and
+    applies a nonlinearity.
+
+    Parameters
+    ----------
+    W_in : Theano shared variable, numpy array or callable
+        Initializer for input-to-gate weight matrix.
+    W_hid : Theano shared variable, numpy array or callable
+        Initializer for hidden-to-gate weight matrix.
+    W_cell : Theano shared variable, numpy array, callable, or None
+        Initializer for cell-to-gate weight vector.  If None, no cell-to-gate
+        weight vector will be stored.
+    b : Theano shared variable, numpy array or callable
+        Initializer for input gate bias vector.
+    nonlinearity : callable or None
+        The nonlinearity that is applied to the input gate activation. If None
+        is provided, no nonlinearity will be applied.
+
+    Examples
+    --------
+    For :class:`LSTMLayer` the bias of the forget gate is often initialized to
+    a large positive value to encourage the layer initially remember the cell
+    value, see e.g. [1]_ page 15.
+
+    >>> import lasagne
+    >>> forget_gate = Gate(b=lasagne.init.Constant(5.0))
+    >>> l_lstm = LSTMLayer((10, 20, 30), num_units=10,
+    ...                    forgetgate=forget_gate)
+
+    References
+    ----------
+    .. [1] Gers, Felix A., Jürgen Schmidhuber, and Fred Cummins. "Learning to
+           forget: Continual prediction with LSTM." Neural computation 12.10
+           (2000): 2451-2471.
+
+    """
+    def __init__(self, W_in=init.Normal(0.1), W_hid=init.Normal(0.1),
+                 W_cell=init.Normal(0.1), b=init.Constant(0.),
+                 nonlinearity=nonlinearities.sigmoid):
+        self.W_in = W_in
+        self.W_hid = W_hid
+        # Don't store a cell weight vector when cell is None
+        if W_cell is not None:
+            self.W_cell = W_cell
+        self.b = b
+        # For the nonlinearity, if None is supplied, use identity
+        if nonlinearity is None:
+            self.nonlinearity = nonlinearities.identity
+        else:
+            self.nonlinearity = nonlinearity
+
+
 class LSTMLayer(MergeLayer):
     r"""
     lasagne.layers.recurrent.LSTMLayer(incoming, num_units,
@@ -158,6 +219,8 @@ class LSTMLayer(MergeLayer):
 
         # Retrieve the dimensionality of the incoming layer
         input_shape = self.input_shapes[0]
+
+        #Parameter dnel
 
         if unroll_scan and input_shape[1] is None:
             raise ValueError("Input sequence length cannot be specified as "
