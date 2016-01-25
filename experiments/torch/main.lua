@@ -41,15 +41,14 @@ if opt.gpu > 0 then
     cutorch.manualSeed(opt.seed)
 end
 
-local x = nn.Linear(opt.k, opt.rnn_size)
-
-local softmax = nn.Sequential():add(nn.Linear(opt.rnn_size, label_size)):add(nn.LogSoftMax())
+local x = nn.Linear(opt.k, params.rnn_size)
+local softmax = nn.Sequential():add(nn.Linear(params.rnn_size, 157)):add(nn.LogSoftMax())
 
 
 local h0 = nn.Linear(opt.k, opt.size)(x)
 local m0 = nn.Linear(opt.k, opt.size)(x)
 local hn, mn = unigrid.unigrid(opt.size, opt.n, h0, m0)
-
+print(sys.COLORS.green ..  '==> Data Ready')
 
 local y = nn.Sigmoid()(nn.CAddTable()({
     nn.Linear(opt.size, 1)(hn), 

@@ -1,7 +1,11 @@
+
+-- adapted from https://github.com/wojciechz/learning_to_execute
+-- utilities for combining/flattening parameters in a model
+-- the code in this script is more general than it needs to be, which is 
+-- why it is kind of a large
+
 require 'torch'
-
 local model_utils = {}
-
 function model_utils.combine_all_parameters(...)
     --[[ like module:getParameters, but operates on many modules ]]--
 
@@ -146,7 +150,6 @@ function model_utils.clone_many_times(net, T)
                 end
             end
         end
-
         clones[t] = clone
         collectgarbage()
     end

@@ -148,7 +148,7 @@ def saveImage(Y, name):
 MIN_LENGTH = 50
 MAX_LENGTH = 19200
 # Number of units in the hidden (recurrent) layer
-N_HIDDEN = 400
+N_HIDDEN = 4
 # Number of training sequences in each batch
 N_BATCH = 250
 # Optimization learning rate
