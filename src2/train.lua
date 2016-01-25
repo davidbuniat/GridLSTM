@@ -11,7 +11,8 @@ require 'torch'
 require 'lfs'
 --require 'cudnn'
 
-nngraph.setDebug(true)
+nngraph.setDebug(false)
+
 local data = require 'data.afreight'
 local GridLstm = require 'model.GridLSTM'
 local model_utils = require 'util.model_utils'
@@ -25,7 +26,7 @@ cmd:option('-mb', 8, 'minibatch size')
 cmd:option('-iters', 100000, 'number of iterations')
 
 -- input params
-cmd:option('-n_data', 16, 'Number of the data')
+cmd:option('-n_data', 455, 'Number of the data')
 cmd:option('-width', 160, 'length of the image')
 cmd:option('-height', 120, 'height of the image ')
 
@@ -46,26 +47,20 @@ cmd:option('-seq_length',64,'number of timesteps to unroll for') -- 19200
 cmd:option('-batch_size',8,'number of sequences to train on in parallel')
 cmd:option('-max_epochs',50,'number of full passes through the training data')
 
+-- bookkeeping
+cmd:option('-seed',123,'torch manual random number generator seed')
+cmd:option('-print_every',1,'how many steps/minibatches between printing out the loss')
+cmd:option('-eval_val_every',1000,'every how many iterations should we evaluate on validation data?')
+cmd:option('-checkpoint_dir', 'cv', 'output directory where checkpoints get written')
+cmd:option('-savefile','lstm','filename to autosave the checkpont to. Will be inside checkpoint_dir/')
+cmd:option('-accurate_gpu_timing',0,'set this flag to 1 to get precise timings when using GPU. Might make code bit slower but reports accurate timings.')
+
+
 cmd:option('-grad_clip',5,'clip gradients at this value')
 cmd:option('-gpuid',-1,'which gpu to use. -1 = use CPU')
 opt = cmd:parse(arg)
+torch.manualSeed(opt.seed)
 
-
-local params_b = {batch_size=5,
-                seq_length=192,
-                layers=1,
-                decay=2,
-                rnn_size=20,
-                dropout=0,
-                init_weight=0.1,
-                lr=1,
-                vocab_size=60,
-                max_epoch=4,
-                max_max_epoch=13,
-                max_grad_norm=5,
-                width = 160,
-                height = 120,
-                n_suquences = 10}
 
 local loader =  data.create(opt.n_data, opt.width, opt.height, opt.batch_size) 
 
@@ -170,44 +165,38 @@ function feval(x)
     local predictions = {}           -- softmax outputs
     local loss = 0
     for t=1,opt.seq_length do
-
         clones.rnn[t]:training() -- make sure we are in correct mode (this is cheap, sets flag)
         local rnn_inputs
-        --print(opt.batch_size..' '.. opt.rnn_size)
-
-        local input_mem_cell = torch.zeros(opt.batch_size, opt.rnn_size)
-        if opt.gpuid >= 0 and opt.opencl == 0 then
-          input_mem_cell = input_mem_cell:float():cuda()
+        if opt.model == "grid_lstm" then
+          local input_mem_cell = torch.zeros(opt.batch_size, opt.rnn_size)
+          if opt.gpuid >= 0 and opt.opencl == 0 then
+            input_mem_cell = input_mem_cell:float():cuda()
+          end
+          rnn_inputs = {input_mem_cell, x[{t,{},{}}], unpack(rnn_state[t-1])} -- if we're using a grid lstm, hand in a zero vec for the starting memory cell state
+        else
+          rnn_inputs = {x[t], unpack(rnn_state[t-1])}
         end
-
-        rnn_inputs = {input_mem_cell, x[{t,{},{}}], unpack(rnn_state[t-1])} -- if we're using a grid lstm, hand in a zero vec for the starting memory cell state
-       	--print(#x[{t,{},1}])
-        print(rnn_inputs)
+        
         local lst = clones.rnn[t]:forward(rnn_inputs)
         rnn_state[t] = {}
-
         for i=1,#init_state do table.insert(rnn_state[t], lst[i]) end -- extract the state, without output
         predictions[t] = lst[#lst] -- last element is the prediction
-
+        --print(predictions[t])
+        --print(#y[t])
         loss = loss + clones.criterion[t]:forward(predictions[t], y[{t,{},1}])
-        
     end
     loss = loss / opt.seq_length
 
     ------------------ backward pass -------------------
     -- initialize gradient at time t to be zeros (there's no influence from future)
-
     local drnn_state = {[opt.seq_length] = clone_list(init_state, true)} -- true also zeros the clones
     for t=opt.seq_length,1,-1 do
         -- backprop through loss, and softmax/linear
-        
-
         local doutput_t = clones.criterion[t]:backward(predictions[t], y[{t,{},1}])
-
         table.insert(drnn_state[t], doutput_t) -- <- drnn_state[t] already has a list of derivative vectors for rnn state pointing to the next time step; just adding the derivative from loss pointing up. 
-        print(196)
+        --print(drnn_state[t])
+
         local dlst = clones.rnn[t]:backward(rnn_inputs, drnn_state[t]) -- <- right here, you're appending the doutput_t to the list of dLdh for all layers, then using that big list to backprop into the input and unpacked rnn state vecs at t-1
-        print(197)
         drnn_state[t-1] = {}
         local skip_index
         if opt.model == "grid_lstm" then skip_index = 2 else skip_index = 1 end
@@ -215,11 +204,11 @@ function feval(x)
             if k > skip_index then -- k <= skip_index is gradient on inputs, which we dont need
                 -- note we do k-1 because first item is dembeddings, and then follow the 
                 -- derivatives of the state, starting at index 2. I know...
-                print(205)
                 drnn_state[t-1][k-skip_index] = v
             end
         end
     end
+
     ------------------------ misc ----------------------
     -- transfer final state to initial state (BPTT)
     init_state_global = rnn_state[#rnn_state] -- NOTE: I don't think this needs to be a clone, right?
@@ -346,5 +335,3 @@ for i = 1, iterations do
         break -- halt
     end
 end
-
-os.execute('open -a  nngraph_6in_5out.svg')
