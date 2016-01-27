@@ -26,15 +26,15 @@ cmd:option('-mb', 8, 'minibatch size')
 cmd:option('-iters', 100000, 'number of iterations')
 
 -- input params
-cmd:option('-n_data', 455, 'Number of the data')
+cmd:option('-n_data', 50, 'Number of the data')
 cmd:option('-width', 160, 'length of the image')
 cmd:option('-height', 120, 'height of the image ')
 
 -- model params
 cmd:option('-rnn_size', 32, 'size of LSTM internal state')
-cmd:option('-num_layers', 1, 'number of layers in the LSTM')
+cmd:option('-num_layers', 3, 'number of layers in the LSTM')
 cmd:option('-model', 'grid_lstm', 'lstm, grid_lstm, gru, or rnn')
-cmd:option('-tie_weights', 0, 'tie grid lstm weights?')
+cmd:option('-tie_weights', 1, 'tie grid lstm weights?')
 
 -- optimization
 cmd:option('-learning_rate',2e-3,'learning rate')
@@ -57,7 +57,7 @@ cmd:option('-accurate_gpu_timing',0,'set this flag to 1 to get precise timings w
 
 
 cmd:option('-grad_clip',5,'clip gradients at this value')
-cmd:option('-gpuid',-1,'which gpu to use. -1 = use CPU')
+cmd:option('-gpuid',0,'which gpu to use. -1 = use CPU')
 opt = cmd:parse(arg)
 torch.manualSeed(opt.seed)
 
@@ -70,7 +70,28 @@ if opt.gpuid > 0 then
     cutorch.setDevice(opt.gpu)
     cutorch.manualSeed(opt.seed)
 end
+
+-- initialize cunn/cutorch for training on the GPU and fall back to CPU gracefully
+if opt.gpuid >= 0 then
+    local ok, cunn = pcall(require, 'cunn')
+    local ok2, cutorch = pcall(require, 'cutorch')
+    if not ok then print('package cunn not found!') end
+    if not ok2 then print('package cutorch not found!') end
+    if ok and ok2 then
+        print('using CUDA on GPU ' .. opt.gpuid .. '...')
+        cutorch.setDevice(opt.gpuid + 1) -- note +1 to make it 0 indexed! sigh lua
+        cutorch.manualSeed(opt.seed)
+    else
+        print('If cutorch and cunn are installed, your CUDA toolkit may be improperly configured.')
+        print('Check your CUDA toolkit installation, rebuild cutorch and cunn, and try again.')
+        print('Falling back on CPU mode')
+        opt.gpuid = -1 -- overwrite user setting
+    end
+end
+
 print(sys.COLORS.red ..  '==> Bulding the Model')
+
+
 
 -- define the model: prototypes for one timestep, then clone them in time
 print('creating an Grid LSTM with ' .. opt.num_layers .. ' layers')
@@ -84,9 +105,14 @@ print(sys.COLORS.red ..  '==> Bulding the Model 1')
 init_state = {}
 for L=1,opt.num_layers do
     local h_init = torch.zeros(opt.batch_size, opt.rnn_size)
-    if opt.gpuid >=0 and opt.opencl == 0 then h_init = h_init:cuda() end
+    if opt.gpuid >=0 then h_init = h_init:cuda() end
     table.insert(init_state, h_init:clone())
     table.insert(init_state, h_init:clone()) -- extra initial state for prev_c
+end
+
+-- ship the model to the GPU if desired
+if opt.gpuid >= 0 then
+    for k,v in pairs(protos) do v:cuda() end
 end
 
 -- put the above things into one flattened parameters tensor
@@ -110,41 +136,25 @@ for layer_idx = 1, opt.num_layers do
 end
 
 print('number of parameters in the model: ' .. params:nElement())
+
+local timer = torch.Timer()
 -- make a bunch of clones after flattening, as that reallocates memory
 clones = {}
 for name,proto in pairs(protos) do
     print('cloning ' .. name)
     clones[name] = model_utils.clone_many_times(proto, opt.seq_length, not proto.parameters)
 end
+local time = timer:time().real
+print('Passed: '..time)
 
 -- preprocessing helper function
 function prepro(x,y)
     x = x:permute(3,1,2):contiguous() -- swap the axes for faster indexing
     y = y:permute(3,1,2):contiguous()
-    if opt.gpuid >= 0 and opt.opencl == 0 then -- ship the input arrays to GPU
+    if opt.gpuid >= 0 then -- ship the input arrays to GPU
         -- have to convert to float because integers can't be cuda()'d
         x = x:float():cuda()
         y = y:float():cuda()
-    end
-    if opt.gpuid >= 0 and opt.opencl == 1 then -- ship the input arrays to GPU
-        x = x:cl()
-        y = y:cl()
-    end
-    return x,y
-end
-
--- preprocessing helper function
-function prepro_old(x,y)
-    x = x:transpose(1,2):contiguous() -- swap the axes for faster indexing
-    y = y:transpose(1,2):contiguous()
-    if opt.gpuid >= 0 and opt.opencl == 0 then -- ship the input arrays to GPU
-        -- have to convert to float because integers can't be cuda()'d
-        x = x:float():cuda()
-        y = y:float():cuda()
-    end
-    if opt.gpuid >= 0 and opt.opencl == 1 then -- ship the input arrays to GPU
-        x = x:cl()
-        y = y:cl()
     end
     return x,y
 end
@@ -167,15 +177,11 @@ function feval(x)
     for t=1,opt.seq_length do
         clones.rnn[t]:training() -- make sure we are in correct mode (this is cheap, sets flag)
         local rnn_inputs
-        if opt.model == "grid_lstm" then
-          local input_mem_cell = torch.zeros(opt.batch_size, opt.rnn_size)
-          if opt.gpuid >= 0 and opt.opencl == 0 then
-            input_mem_cell = input_mem_cell:float():cuda()
-          end
-          rnn_inputs = {input_mem_cell, x[{t,{},{}}], unpack(rnn_state[t-1])} -- if we're using a grid lstm, hand in a zero vec for the starting memory cell state
-        else
-          rnn_inputs = {x[t], unpack(rnn_state[t-1])}
+        local input_mem_cell = torch.zeros(opt.batch_size, opt.rnn_size)
+        if opt.gpuid >= 0 then
+        	input_mem_cell = input_mem_cell:float():cuda()
         end
+        rnn_inputs = {input_mem_cell, x[{t,{},{}}], unpack(rnn_state[t-1])} -- if we're using a grid lstm, hand in a zero vec for the starting memory cell state
         
         local lst = clones.rnn[t]:forward(rnn_inputs)
         rnn_state[t] = {}
@@ -222,35 +228,31 @@ end
 -- evaluate the loss over an entire split
 function eval_split(split_index, max_batches)
     print('evaluating loss over split index ' .. split_index)
-    local n = loader.split_sizes[split_index]
+    local n = loader.ntest / opt.batch_size
     if max_batches ~= nil then n = math.min(max_batches, n) end
 
-    loader:reset_batch_pointer(split_index) -- move batch iteration pointer for this split to front
+    --loader:reset_batch_pointer(split_index) -- move batch iteration pointer for this split to front
     local loss = 0
     local rnn_state = {[0] = init_state}
     
     for i = 1,n do -- iterate over batches in the split
         -- fetch a batch
-        local x, y = loader:next_batch(split_index)
+        local x, y = loader:next_eval_batch()
         x,y = prepro(x,y)
         -- forward pass
         for t=1,opt.seq_length do
             clones.rnn[t]:evaluate() -- for dropout proper functioning
-            if opt.model == "grid_lstm" then
-              local input_mem_cell = torch.zeros(opt.batch_size, opt.rnn_size)
-              if opt.gpuid >= 0 and opt.opencl == 0 then
-                input_mem_cell = input_mem_cell:float():cuda()
-              end
-              rnn_inputs = {input_mem_cell, x[t], unpack(rnn_state[t-1])} -- if we're using a grid lstm, hand in a zero vec for the starting memory cell state
-            else
-              rnn_inputs = {x[t], unpack(rnn_state[t-1])}
+            local input_mem_cell = torch.zeros(opt.batch_size, opt.rnn_size)
+            if opt.gpuid >= 0 then
+              input_mem_cell = input_mem_cell:float():cuda()
             end
+            rnn_inputs = {input_mem_cell, x[{t,{},{}}], unpack(rnn_state[t-1])} -- if we're using a grid lstm, hand in a zero vec for the starting memory cell state
 
             local lst = clones.rnn[t]:forward(rnn_inputs)
             rnn_state[t] = {}
             for i=1,#init_state do table.insert(rnn_state[t], lst[i]) end
             prediction = lst[#lst] 
-            loss = loss + clones.criterion[t]:forward(prediction, y[t])
+            loss = loss + clones.criterion[t]:forward(prediction, y[{t,{},1}])
         end
         -- carry over lstm state
         rnn_state[0] = rnn_state[#rnn_state]
@@ -266,13 +268,12 @@ train_losses = {}
 val_losses = {}
 
 local optim_state = {learningRate = opt.learning_rate, alpha = opt.decay_rate}
-local iterations = opt.max_epochs * loader.ntrain
+local iterations = loader.ntrain/opt.batch_size
 
 local iterations_per_epoch = loader.ntrain
 local loss0 = nil
-for i = 1, iterations do
-    local epoch = i / loader.ntrain
-    print ('epoch '..epoch)
+for i = 1, iterations  do
+    local epoch = opt.batch_size * i / loader.ntrain
     local timer = torch.Timer()
 
     local _, loss = optim.rmsprop(feval, params, optim_state)
@@ -297,26 +298,27 @@ for i = 1, iterations do
             print('decayed learning rate by a factor ' .. decay_factor .. ' to ' .. optim_state.learningRate)
         end
     end
-
+    
     -- every now and then or on last iteration
     if i % opt.eval_val_every == 0 or i == iterations then
-        -- evaluate loss on validation data
-        local val_loss = eval_split(2) -- 2 = validation
-        val_losses[i] = val_loss
-
-        local savefile = string.format('%s/lm_%s_epoch%.2f_%.4f.t7', opt.checkpoint_dir, opt.savefile, epoch, val_loss)
-        print('saving checkpoint to ' .. savefile)
-        local checkpoint = {}
-        checkpoint.protos = protos
-        checkpoint.opt = opt
-        checkpoint.train_losses = train_losses
-        checkpoint.val_loss = val_loss
-        checkpoint.val_losses = val_losses
-        checkpoint.i = i
-        checkpoint.epoch = epoch
-        checkpoint.vocab = loader.vocab_mapping
-        torch.save(savefile, checkpoint)
+    	    -- evaluate loss on validation data
+    	    local val_loss = eval_split(2) -- 2 = validation
+    	    val_losses[i] = val_loss
+	
+    	    local savefile = string.format('%s/lm_%s_epoch%.2f_%.4f.t7', opt.checkpoint_dir, opt.savefile, epoch, val_loss)
+    	    print('saving checkpoint to ' .. savefile)
+    	    local checkpoint = {}
+    	    checkpoint.protos = protos
+    	    checkpoint.opt = opt
+    	    checkpoint.train_losses = train_losses
+    	    checkpoint.val_loss = val_loss
+    	    checkpoint.val_losses = val_losses
+    	    checkpoint.i = i
+    	    checkpoint.epoch = epoch
+    	    checkpoint.vocab = loader.vocab_mapping
+    	    torch.save(savefile, checkpoint)
     end
+
 
     if i % opt.print_every == 0 then
         print(string.format("%d/%d (epoch %.3f), train_loss = %6.8f, grad/param norm = %6.4e, time/batch = %.4fs", i, iterations, epoch, train_loss, grad_params:norm() / params:norm(), time))

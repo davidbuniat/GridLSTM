@@ -111,6 +111,7 @@ end
 
 
 function model_utils.clone_many_times(net, T)
+    local timer = torch.Timer()
     local clones = {}
 
     local params, gradParams
@@ -150,6 +151,8 @@ function model_utils.clone_many_times(net, T)
                 end
             end
         end
+        local time = timer:time().real
+        if (t%100==0) then print('Cloning Completed: '..t/T..'%'..' '..time..'s') end
         clones[t] = clone
         collectgarbage()
     end

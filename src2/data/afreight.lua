@@ -67,6 +67,8 @@ function data.create(n_sequence, width, height, batch_size)
 	}
 	
 	function label(y) 
+		
+		local timer = torch.Timer()
 		print(sys.COLORS.red ..  '==> labeling')
 		torch.mul(y,y,255)
 		torch.floor(y,y)
@@ -93,9 +95,11 @@ function data.create(n_sequence, width, height, batch_size)
 		        	end
 		        end
 		    end
-		    collectgarbage();
+		    
 		end
-	
+		local time = timer:time().real
+		print('Passed: '..time)
+		collectgarbage();
 		
 		--new_y = torch.div(new_y,index)
 		return new_y
@@ -310,9 +314,13 @@ function data.create(n_sequence, width, height, batch_size)
 	self.labels = labels
 	self.labels_rev = labels_rev
 	self.ntrain = trsize
+	self.ntest = (#testData.data)[1]
 
 	self.current_batch = 0
 	self.evaluated_batches = 0
+
+	self.current_test_batch = 0
+	self.evaluated_test_batches = 0 
 	
 	self.width = width
 	self.height = height
@@ -324,20 +332,33 @@ function data.create(n_sequence, width, height, batch_size)
 
 	print(sys.COLORS.green ..  '==> Data Ready')
 
-
 	function self:next_batch()
 		
 		self.evaluated_batches = self.evaluated_batches + 1
-	
-		batch_x = torch.Tensor(self.batch_size, 3, self.width* self.height)
-		batch_y = torch.Tensor(self.batch_size, 1, self.width* self.height)
+		batch_x = torch.Tensor(self.batch_size, 3, self.width * self.height)
+		batch_y = torch.Tensor(self.batch_size, 1, self.width * self.height)
 
 		for i = 1, batch_size do 
-			
+			if(self.current_batch*self.batch_size+i>self.ntrain) then break end
 			batch_x[i] = trainData.data[self.current_batch*(self.batch_size)+i]
 			batch_y[i] = trainData.labels[self.current_batch*(self.batch_size)+i]
 		end
-		self.current_batch = (self.current_batch % self.nbatches) +1
+		self.current_batch = self.current_batch +1
+
+    	return batch_x, batch_y
+	end
+
+	function self:next_eval_batch()
+		
+		self.evaluated_test_batches = self.evaluated_test_batches + 1
+	
+		batch_x = torch.Tensor(self.batch_size, 3, self.width * self.height)
+		for i = 1, batch_size do 
+			if(self.current_test_batch*(self.batch_size)+i>self.ntest) then break end
+			batch_x[i] = testData.data[self.current_test_batch*(self.batch_size)+i]
+			batch_y[i] = testData.labels[self.current_test_batch*(self.batch_size)+i]
+		end
+		self.current_test_batch = self.current_test_batch +1
 
     	return batch_x, batch_y
 	end
