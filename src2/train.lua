@@ -21,20 +21,23 @@ cmd = torch.CmdLine()
 cmd:text('Train a 1 dimensional grid lstm')
 cmd:text('Options')
 cmd:option('-input_k', 3, 'size of input bit vector')
-cmd:option('-n', 2, 'number of layers')
+cmd:option('-n', 4, 'number of layers')
 cmd:option('-mb', 8, 'minibatch size')
 cmd:option('-iters', 100000, 'number of iterations')
 
 -- input params
-cmd:option('-n_data', 50, 'Number of the data')
+cmd:option('-n_data', 16, 'Number of the data')
+cmd:option('-n_x', 4, 'width of the image')
+cmd:option('-n_y', 4, 'height of the image')
+
 cmd:option('-width', 160, 'length of the image')
 cmd:option('-height', 120, 'height of the image ')
 
 -- model params
 cmd:option('-rnn_size', 32, 'size of LSTM internal state')
-cmd:option('-num_layers', 3, 'number of layers in the LSTM')
+cmd:option('-num_layers', 1, 'number of layers in the LSTM')
 cmd:option('-model', 'grid_lstm', 'lstm, grid_lstm, gru, or rnn')
-cmd:option('-tie_weights', 1, 'tie grid lstm weights?')
+cmd:option('-tie_weights', 0, 'tie grid lstm weights?')
 
 -- optimization
 cmd:option('-learning_rate',2e-3,'learning rate')
@@ -43,7 +46,7 @@ cmd:option('-learning_rate_decay_after',10,'in number of epochs, when to start d
 cmd:option('-decay_rate',0.95,'decay rate for rmsprop')
 
 cmd:option('-dropout',0,'dropout for regularization, used after each RNN hidden layer. 0 = no dropout')
-cmd:option('-seq_length',64,'number of timesteps to unroll for') -- 19200
+cmd:option('-seq_length',256,'number of timesteps to unroll for') -- 19200
 cmd:option('-batch_size',8,'number of sequences to train on in parallel')
 cmd:option('-max_epochs',50,'number of full passes through the training data')
 
@@ -61,6 +64,7 @@ cmd:option('-gpuid',0,'which gpu to use. -1 = use CPU')
 opt = cmd:parse(arg)
 torch.manualSeed(opt.seed)
 
+opt.seq_length = opt.n_x * opt.n_y;
 
 local loader =  data.create(opt.n_data, opt.width, opt.height, opt.batch_size) 
 
@@ -108,6 +112,7 @@ for L=1,opt.num_layers do
     if opt.gpuid >=0 then h_init = h_init:cuda() end
     table.insert(init_state, h_init:clone())
     table.insert(init_state, h_init:clone()) -- extra initial state for prev_c
+    -- Need Extra states for y,x dimensions
 end
 
 -- ship the model to the GPU if desired
@@ -168,50 +173,86 @@ function feval(x)
 
     ------------------ get minibatch -------------------
     local x, y = loader:next_batch(1)
-  	x,y = prepro(x,y)
+  	x_input,y = prepro(x,y)
 
     ------------------- forward pass -------------------
     local rnn_state = {[0] = init_state_global}
+    -- Copy along previous row 
+    for i = 0,opt.n_x do
+    	rnn_state[-i] = init_state_global
+    end
+
+    
     local predictions = {}           -- softmax outputs
     local loss = 0
-    for t=1,opt.seq_length do
-        clones.rnn[t]:training() -- make sure we are in correct mode (this is cheap, sets flag)
-        local rnn_inputs
-        local input_mem_cell = torch.zeros(opt.batch_size, opt.rnn_size)
-        if opt.gpuid >= 0 then
-        	input_mem_cell = input_mem_cell:float():cuda()
-        end
-        rnn_inputs = {input_mem_cell, x[{t,{},{}}], unpack(rnn_state[t-1])} -- if we're using a grid lstm, hand in a zero vec for the starting memory cell state
-        
-        local lst = clones.rnn[t]:forward(rnn_inputs)
-        rnn_state[t] = {}
-        for i=1,#init_state do table.insert(rnn_state[t], lst[i]) end -- extract the state, without output
-        predictions[t] = lst[#lst] -- last element is the prediction
-        --print(predictions[t])
-        --print(#y[t])
-        loss = loss + clones.criterion[t]:forward(predictions[t], y[{t,{},1}])
+
+    -- Iterate for each coordinate
+    for x=1,opt.n_x do
+    	for y=1,opt.n_y do
+    		-- Get coordinates
+    		local xy = (x-1)*opt.n_x+y 			-- x,y coordinate in 1D
+    		local prev_x = (x-2)*(opt.n_x)+y 	-- x-1,y coordinate in 1D
+    		local prev_y = (x-1)*opt.n_x+y-1	-- x,y-1 coordinate in 1D
+
+        	clones.rnn[xy]:training() -- make sure we are in correct mode (this is cheap, sets flag)
+        	local rnn_inputs
+        	local input_mem_cell = torch.zeros(opt.batch_size, opt.rnn_size)
+        	if opt.gpuid >= 0 then
+        		input_mem_cell = input_mem_cell:float():cuda()
+        	end
+        	-- Concat states of previous dimension x and y into prev_state
+        	prev_x = {unpack(rnn_state[prev_x])}
+        	prev_state = {unpack(rnn_state[prev_y])} 				-- include y dimensions
+        		for k,v in pairs(prev_x) do prev_state[k+#prev_x] = v end -- copy from prev_x
+
+        	rnn_inputs = {input_mem_cell, x_input[{xy,{},{}}], unpack(prev_state)} -- if we're using a grid lstm, hand in a zero vec for the starting memory cell state
+        	print('rnn_inputs')
+        	print(rnn_inputs)
+        	local lst = clones.rnn[xy]:forward(rnn_inputs)
+        	print('output')
+        	print(lst)
+        	rnn_state[xy] = {}
+
+        	--Not Sure here if it will map right or not
+        	for i=1,#init_state do table.insert(rnn_state[xy], lst[i]) end -- extract the state, without output
+        	predictions[t] = lst[#lst] -- last element is the prediction
+        	print('RNN Prediction'..#predictions)
+        	--print(predictions[t])
+        	--print(#y[t])
+        	os.exit()
+        	loss = loss + clones.criterion[t]:forward(predictions[xy], y[{xy,{},1}])
+       	end
     end
     loss = loss / opt.seq_length
 
     ------------------ backward pass -------------------
     -- initialize gradient at time t to be zeros (there's no influence from future)
     local drnn_state = {[opt.seq_length] = clone_list(init_state, true)} -- true also zeros the clones
-    for t=opt.seq_length,1,-1 do
-        -- backprop through loss, and softmax/linear
-        local doutput_t = clones.criterion[t]:backward(predictions[t], y[{t,{},1}])
-        table.insert(drnn_state[t], doutput_t) -- <- drnn_state[t] already has a list of derivative vectors for rnn state pointing to the next time step; just adding the derivative from loss pointing up. 
-        --print(drnn_state[t])
+    for x=opt.n_x,1,-1 do
+    	for y=opt.n_y,1,-1 do
+    		local xy = x*(opt.n_x-1)+y 			-- x,y coordinate in 1D
+    		local prev_x = (x-1)*(opt.n_x-1)+y 	-- x-1,y coordinate in 1D
+    		local prev_y = x*(opt.n_x-1)+y-1	-- x,y-1 coordinate in 1D
 
-        local dlst = clones.rnn[t]:backward(rnn_inputs, drnn_state[t]) -- <- right here, you're appending the doutput_t to the list of dLdh for all layers, then using that big list to backprop into the input and unpacked rnn state vecs at t-1
-        drnn_state[t-1] = {}
-        local skip_index
-        if opt.model == "grid_lstm" then skip_index = 2 else skip_index = 1 end
-        for k,v in pairs(dlst) do
-            if k > skip_index then -- k <= skip_index is gradient on inputs, which we dont need
-                -- note we do k-1 because first item is dembeddings, and then follow the 
-                -- derivatives of the state, starting at index 2. I know...
-                drnn_state[t-1][k-skip_index] = v
-            end
+        	-- backprop through loss, and softmax/linear
+        	local doutput_t = clones.criterion[t]:backward(predictions[xy], y[{xy,{},1}])
+        	table.insert(drnn_state[xy], doutput_t) -- <- drnn_state[t] already has a list of derivative vectors for rnn state pointing to the next time step; just adding the derivative from loss pointing up. 
+        	--print(drnn_state[t])
+	
+        	local dlst = clones.rnn[xy]:backward(rnn_inputs, drnn_state[xy]) -- <- right here, you're appending the doutput_t to the list of dLdh for all layers, then using that big list to backprop into the input and unpacked rnn state vecs at t-1
+        	drnn_state[prev_x] = {}
+        	drnn_state[prev_y] = {}
+        	local skip_index
+        	skip_index = 2
+
+        	print(dlst)
+        	for k,v in pairs(dlst) do
+        	    if k > skip_index then -- k <= skip_index is gradient on inputs, which we dont need
+        	        -- note we do k-1 because first item is dembeddings, and then follow the 
+        	        -- derivatives of the state, starting at index 2. I know...
+        	        drnn_state[t-1][k-skip_index] = v
+        	    end
+        	end
         end
     end
 
