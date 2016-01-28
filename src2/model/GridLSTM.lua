@@ -1,6 +1,6 @@
 require 'nn'
 require 'nngraph'
-nngraph.setDebug(true)
+
 --[[
   This is called once per dimension inside a grid LSTM block to create the gated
   update of the dimension's hidden state and memory cell.

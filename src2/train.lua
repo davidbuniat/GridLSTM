@@ -26,7 +26,7 @@ cmd:option('-mb', 8, 'minibatch size')
 cmd:option('-iters', 100000, 'number of iterations')
 
 -- input params
-cmd:option('-n_data', 16, 'Number of the data')
+cmd:option('-n_data', 455, 'Number of the data')
 cmd:option('-n_x', 4, 'width of the image')
 cmd:option('-n_y', 4, 'height of the image')
 
@@ -110,9 +110,12 @@ init_state = {}
 for L=1,opt.num_layers do
     local h_init = torch.zeros(opt.batch_size, opt.rnn_size)
     if opt.gpuid >=0 then h_init = h_init:cuda() end
-    table.insert(init_state, h_init:clone())
-    table.insert(init_state, h_init:clone()) -- extra initial state for prev_c
-    -- Need Extra states for y,x dimensions
+    table.insert(init_state, h_init:clone())	-- x dimension states
+    table.insert(init_state, h_init:clone()) 	-- extra initial state for prev_c_x
+    
+    table.insert(init_state, h_init:clone())	-- y dimension states
+    table.insert(init_state, h_init:clone())	-- extra initial state for prev_c_y
+    
 end
 
 -- ship the model to the GPU if desired
@@ -173,7 +176,7 @@ function feval(x)
 
     ------------------ get minibatch -------------------
     local x, y = loader:next_batch(1)
-  	x_input,y = prepro(x,y)
+  	x_input,y_output = prepro(x,y)
 
     ------------------- forward pass -------------------
     local rnn_state = {[0] = init_state_global}
@@ -183,7 +186,7 @@ function feval(x)
     end
 
     
-    local predictions = {}           -- softmax outputs
+    local predictions = {} 	-- softmax outputs
     local loss = 0
 
     -- Iterate for each coordinate
@@ -200,34 +203,38 @@ function feval(x)
         	if opt.gpuid >= 0 then
         		input_mem_cell = input_mem_cell:float():cuda()
         	end
-        	-- Concat states of previous dimension x and y into prev_state
-        	prev_x = {unpack(rnn_state[prev_x])}
-        	prev_state = {unpack(rnn_state[prev_y])} 				-- include y dimensions
-        		for k,v in pairs(prev_x) do prev_state[k+#prev_x] = v end -- copy from prev_x
 
-        	rnn_inputs = {input_mem_cell, x_input[{xy,{},{}}], unpack(prev_state)} -- if we're using a grid lstm, hand in a zero vec for the starting memory cell state
-        	print('rnn_inputs')
-        	print(rnn_inputs)
+        	-- Concatinate states of previous dimension x and y into prev_state
+        	prev_h_x = (rnn_state[prev_x])[1]
+			prev_c_x = (rnn_state[prev_x])[2]
+
+			prev_h_y = (rnn_state[prev_y])[3]
+			prev_c_y = (rnn_state[prev_y])[4]
+
+			prev_state = {prev_h_x, prev_c_x, prev_h_y, prev_c_y}
+        	rnn_inputs = {input_mem_cell, x_input[{xy,{},{}}], unpack(prev_state) } -- if we're using a grid lstm, hand in a zero vec for the starting memory cell state
+
         	local lst = clones.rnn[xy]:forward(rnn_inputs)
-        	print('output')
-        	print(lst)
         	rnn_state[xy] = {}
 
-        	--Not Sure here if it will map right or not
         	for i=1,#init_state do table.insert(rnn_state[xy], lst[i]) end -- extract the state, without output
-        	predictions[t] = lst[#lst] -- last element is the prediction
-        	print('RNN Prediction'..#predictions)
-        	--print(predictions[t])
-        	--print(#y[t])
-        	os.exit()
-        	loss = loss + clones.criterion[t]:forward(predictions[xy], y[{xy,{},1}])
+
+        	predictions[xy] = lst[#lst] -- last element is the prediction
+	       	--print('forward '..xy..': x='..x..' y='..y)
+
+        	loss = loss + clones.criterion[xy]:forward(predictions[xy], y_output[{xy,{},1}])
        	end
     end
     loss = loss / opt.seq_length
 
     ------------------ backward pass -------------------
     -- initialize gradient at time t to be zeros (there's no influence from future)
-    local drnn_state = {[opt.seq_length] = clone_list(init_state, true)} -- true also zeros the clones
+    local drnn_state = {}--{[opt.seq_length] = clone_list(init_state, true)} -- true also zeros the clones
+    for i = 1,opt.n_x+opt.seq_length do -- padding for states
+    	drnn_state[i] = clone_list(init_state, true)
+    end
+
+
     for x=opt.n_x,1,-1 do
     	for y=opt.n_y,1,-1 do
     		local xy = x*(opt.n_x-1)+y 			-- x,y coordinate in 1D
@@ -235,24 +242,41 @@ function feval(x)
     		local prev_y = x*(opt.n_x-1)+y-1	-- x,y-1 coordinate in 1D
 
         	-- backprop through loss, and softmax/linear
-        	local doutput_t = clones.criterion[t]:backward(predictions[xy], y[{xy,{},1}])
-        	table.insert(drnn_state[xy], doutput_t) -- <- drnn_state[t] already has a list of derivative vectors for rnn state pointing to the next time step; just adding the derivative from loss pointing up. 
-        	--print(drnn_state[t])
-	
-        	local dlst = clones.rnn[xy]:backward(rnn_inputs, drnn_state[xy]) -- <- right here, you're appending the doutput_t to the list of dLdh for all layers, then using that big list to backprop into the input and unpacked rnn state vecs at t-1
-        	drnn_state[prev_x] = {}
-        	drnn_state[prev_y] = {}
-        	local skip_index
-        	skip_index = 2
 
-        	print(dlst)
-        	for k,v in pairs(dlst) do
-        	    if k > skip_index then -- k <= skip_index is gradient on inputs, which we dont need
-        	        -- note we do k-1 because first item is dembeddings, and then follow the 
-        	        -- derivatives of the state, starting at index 2. I know...
-        	        drnn_state[t-1][k-skip_index] = v
-        	    end
-        	end
+        	local doutput_xy = clones.criterion[xy]:backward(predictions[xy], y_output[{xy,{},1}])
+        	drnn_state[xy][5] = doutput_xy -- <- drnn_state[xt] already has a list of derivative vectors for rnn state pointing to the next time step; just adding the derivative from loss pointing up. 
+			--print('drnn_current_state')
+			--print(drnn_state[xy])
+			
+        	local dlst = clones.rnn[xy]:backward(rnn_inputs, drnn_state[xy]) -- <- right here, you're appending the doutput_t to the list of dLdh for all layers, then using that big list to backprop into the input and unpacked rnn state vecs at t-1
+
+
+        	-- Need more systematic approach of updating previous 
+        	-- update previous drnn
+        	--drnn_state[prev_x] = drnn_state[prev_x] or {}
+        	--drnn_state[prev_y] = drnn_state[prev_y] or {}
+        	--drnn_state[prev_x] = {}
+        	--drnn_state[prev_y] = {}
+        	--print(dlst)
+
+        	-- sava dembedings  
+        	-- update only which one exists
+
+        	drnn_state[prev_x][1] = dlst[3]
+        	drnn_state[prev_x][2] = dlst[4]
+        	--drnn_state[prev_x][3] = drnn_state[prev_x][3] or torch.zeros(opt.batch_size, opt.rnn_size)
+        	--drnn_state[prev_x][4] = drnn_state[prev_x][4] or torch.zeros(opt.batch_size, opt.rnn_size)
+        	--print('drnn_next step')
+        	--print(drnn_state[prev_x])
+        	--drnn_state[prev_y][1] = drnn_state[prev_y][1] or torch.zeros(opt.batch_size, opt.rnn_size)
+        	--drnn_state[prev_y][2] = drnn_state[prev_y][2] or torch.zeros(opt.batch_size, opt.rnn_size)
+        	drnn_state[prev_y][3] = dlst[5]
+        	drnn_state[prev_y][4] = dlst[6]
+
+        	if opt.gpuid >= 0 then
+			    for k,v in pairs(drnn_state[prev_x]) do v:cuda() end
+			    for k,v in pairs(drnn_state[prev_y]) do v:cuda() end
+			end
         end
     end
 
@@ -268,6 +292,7 @@ end
 
 -- evaluate the loss over an entire split
 function eval_split(split_index, max_batches)
+
     print('evaluating loss over split index ' .. split_index)
     local n = loader.ntest / opt.batch_size
     if max_batches ~= nil then n = math.min(max_batches, n) end
@@ -341,7 +366,7 @@ for i = 1, iterations  do
     end
     
     -- every now and then or on last iteration
-    if i % opt.eval_val_every == 0 or i == iterations then
+    if i % opt.eval_val_every == 0 or i == iterations and false then
     	    -- evaluate loss on validation data
     	    local val_loss = eval_split(2) -- 2 = validation
     	    val_losses[i] = val_loss
