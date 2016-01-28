@@ -26,7 +26,7 @@ cmd:option('-mb', 8, 'minibatch size')
 cmd:option('-iters', 100000, 'number of iterations')
 
 -- input params
-cmd:option('-n_data', 455, 'Number of the data')
+cmd:option('-n_data', 50, 'Number of the data')
 cmd:option('-n_x', 4, 'width of the image')
 cmd:option('-n_y', 4, 'height of the image')
 
@@ -35,7 +35,7 @@ cmd:option('-height', 120, 'height of the image ')
 
 -- model params
 cmd:option('-rnn_size', 32, 'size of LSTM internal state')
-cmd:option('-num_layers', 1, 'number of layers in the LSTM')
+cmd:option('-num_layers', 4, 'number of layers in the LSTM')
 cmd:option('-model', 'grid_lstm', 'lstm, grid_lstm, gru, or rnn')
 cmd:option('-tie_weights', 0, 'tie grid lstm weights?')
 
@@ -205,13 +205,15 @@ function feval(x)
         	end
 
         	-- Concatinate states of previous dimension x and y into prev_state
-        	prev_h_x = (rnn_state[prev_x])[1]
-			prev_c_x = (rnn_state[prev_x])[2]
+        	prev_state = {}
+        	for L=1,opt.num_layers do
+        		table.insert(prev_state, rnn_state[prev_x][L]) 		-- prev x_c 
+				table.insert(prev_state, rnn_state[prev_x][L+1]) 	-- prev x_h
+	
+				table.insert(prev_state, rnn_state[prev_y][L+2])	-- prev y_c 
+				table.insert(prev_state, rnn_state[prev_y][L+3])	-- prev y_h 
+        	end
 
-			prev_h_y = (rnn_state[prev_y])[3]
-			prev_c_y = (rnn_state[prev_y])[4]
-
-			prev_state = {prev_h_x, prev_c_x, prev_h_y, prev_c_y}
         	rnn_inputs = {input_mem_cell, x_input[{xy,{},{}}], unpack(prev_state) } -- if we're using a grid lstm, hand in a zero vec for the starting memory cell state
 
         	local lst = clones.rnn[xy]:forward(rnn_inputs)
@@ -242,41 +244,21 @@ function feval(x)
     		local prev_y = x*(opt.n_x-1)+y-1	-- x,y-1 coordinate in 1D
 
         	-- backprop through loss, and softmax/linear
-
         	local doutput_xy = clones.criterion[xy]:backward(predictions[xy], y_output[{xy,{},1}])
-        	drnn_state[xy][5] = doutput_xy -- <- drnn_state[xt] already has a list of derivative vectors for rnn state pointing to the next time step; just adding the derivative from loss pointing up. 
-			--print('drnn_current_state')
-			--print(drnn_state[xy])
-			
+        	drnn_state[xy][(#init_state+1)] = doutput_xy -- <- drnn_state[xt] already has a list of derivative vectors for rnn state pointing to the next time step; just adding the derivative from loss pointing up. 
         	local dlst = clones.rnn[xy]:backward(rnn_inputs, drnn_state[xy]) -- <- right here, you're appending the doutput_t to the list of dLdh for all layers, then using that big list to backprop into the input and unpacked rnn state vecs at t-1
 
-
-        	-- Need more systematic approach of updating previous 
         	-- update previous drnn
-        	--drnn_state[prev_x] = drnn_state[prev_x] or {}
-        	--drnn_state[prev_y] = drnn_state[prev_y] or {}
-        	--drnn_state[prev_x] = {}
-        	--drnn_state[prev_y] = {}
-        	--print(dlst)
-
         	-- sava dembedings  
-        	-- update only which one exists
+        	local k = 3 -- skipping first two weights as they are input/grad
+	        for L=1,opt.num_layers do
+	        	drnn_state[prev_x][L] 	= dlst[k]	-- prev x_c 
+        		drnn_state[prev_x][L+1] = dlst[k+1]	-- prev x_h 
 
-        	drnn_state[prev_x][1] = dlst[3]
-        	drnn_state[prev_x][2] = dlst[4]
-        	--drnn_state[prev_x][3] = drnn_state[prev_x][3] or torch.zeros(opt.batch_size, opt.rnn_size)
-        	--drnn_state[prev_x][4] = drnn_state[prev_x][4] or torch.zeros(opt.batch_size, opt.rnn_size)
-        	--print('drnn_next step')
-        	--print(drnn_state[prev_x])
-        	--drnn_state[prev_y][1] = drnn_state[prev_y][1] or torch.zeros(opt.batch_size, opt.rnn_size)
-        	--drnn_state[prev_y][2] = drnn_state[prev_y][2] or torch.zeros(opt.batch_size, opt.rnn_size)
-        	drnn_state[prev_y][3] = dlst[5]
-        	drnn_state[prev_y][4] = dlst[6]
-
-        	if opt.gpuid >= 0 then
-			    for k,v in pairs(drnn_state[prev_x]) do v:cuda() end
-			    for k,v in pairs(drnn_state[prev_y]) do v:cuda() end
-			end
+        		drnn_state[prev_y][L+2] = dlst[k+2]	-- prev y_c 
+        		drnn_state[prev_y][L+3] = dlst[k+3]	-- prev y_h 
+        		k = k + 4
+        	end
         end
     end
 
