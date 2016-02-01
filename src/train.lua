@@ -26,16 +26,16 @@ cmd:option('-mb', 8, 'minibatch size')
 cmd:option('-iters', 100000, 'number of iterations')
 
 -- input params
-cmd:option('-n_data', 50, 'Number of the data')
-cmd:option('-n_x', 4, 'width of the image')
-cmd:option('-n_y', 4, 'height of the image')
+cmd:option('-n_data', 455, 'Number of the data')
+cmd:option('-n_x', 16, 'width of the image')
+cmd:option('-n_y', 16, 'height of the image')
 
 cmd:option('-width', 160, 'length of the image')
 cmd:option('-height', 120, 'height of the image ')
 
 -- model params
 cmd:option('-rnn_size', 32, 'size of LSTM internal state')
-cmd:option('-num_layers', 4, 'number of layers in the LSTM')
+cmd:option('-num_layers', 2, 'number of layers in the LSTM')
 cmd:option('-model', 'grid_lstm', 'lstm, grid_lstm, gru, or rnn')
 cmd:option('-tie_weights', 0, 'tie grid lstm weights?')
 
@@ -246,6 +246,7 @@ function feval(x)
         	-- backprop through loss, and softmax/linear
         	local doutput_xy = clones.criterion[xy]:backward(predictions[xy], y_output[{xy,{},1}])
         	drnn_state[xy][(#init_state+1)] = doutput_xy -- <- drnn_state[xt] already has a list of derivative vectors for rnn state pointing to the next time step; just adding the derivative from loss pointing up. 
+
         	local dlst = clones.rnn[xy]:backward(rnn_inputs, drnn_state[xy]) -- <- right here, you're appending the doutput_t to the list of dLdh for all layers, then using that big list to backprop into the input and unpacked rnn state vecs at t-1
 
         	-- update previous drnn
