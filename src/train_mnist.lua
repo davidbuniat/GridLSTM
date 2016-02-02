@@ -36,7 +36,7 @@ cmd:option('-height', 28, 'height of the image ')
 
 -- model params
 cmd:option('-rnn_size', 32, 'size of LSTM internal state')
-cmd:option('-num_layers', 4, 'number of layers in the LSTM')
+cmd:option('-num_layers', 1, 'number of layers in the LSTM')
 cmd:option('-model', 'grid_lstm', 'lstm, grid_lstm, gru, or rnn')
 cmd:option('-tie_weights', 1, 'tie grid lstm weights?')
 
@@ -48,7 +48,7 @@ cmd:option('-decay_rate',0.95,'decay rate for rmsprop')
 
 cmd:option('-dropout',0,'dropout for regularization, used after each RNN hidden layer. 0 = no dropout')
 cmd:option('-seq_length',256,'number of timesteps to unroll for') -- 19200
-cmd:option('-batch_size',64,'number of sequences to train on in parallel')
+cmd:option('-batch_size',8,'number of sequences to train on in parallel')
 cmd:option('-max_epochs',500,'number of full passes through the training data')
 
 -- bookkeeping
@@ -254,7 +254,7 @@ function feval(x)
 
             --print(y_out)
         	rnn_inputs = {input_mem_cell,x_in, unpack(prev_state) } -- if we're using a grid lstm, hand in a zero vec for the starting memory cell state
-
+            print(rnn_inputs)
         	local lst = clones.rnn[xy]:forward(rnn_inputs)
         	rnn_state[xy] = {}
 

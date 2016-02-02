@@ -213,8 +213,8 @@ function feval(x)
 				table.insert(prev_state, rnn_state[prev_y][L+2])	-- prev y_c 
 				table.insert(prev_state, rnn_state[prev_y][L+3])	-- prev y_h 
         	end
-
-        	rnn_inputs = {input_mem_cell, x_input[{xy,{},{}}], unpack(prev_state) } -- if we're using a grid lstm, hand in a zero vec for the starting memory cell state
+            -- it was x_input[{xy,{},{}}], just we will need to refer later
+        	rnn_inputs = {input_mem_cell, input, unpack(prev_state) } -- if we're using a grid lstm, hand in a zero vec for the starting memory cell state
 
         	local lst = clones.rnn[xy]:forward(rnn_inputs)
         	rnn_state[xy] = {}
