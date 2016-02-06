@@ -1,6 +1,7 @@
 require 'rnn'
-require 'model.GridLSTM_rnn'
+require 'model.gridLSTM_rnn'
 require 'optim'
+require 'util.SymmetricTable'
 
 
 -- hyper-parameters 
@@ -12,7 +13,7 @@ input_k = 1
 rnn_size = 64
 output_size = 1
 nIndex = 10
-n_layers = 2
+n_layers = 1
 dropout = 0.5
 should_tie_weights = 0
 lr = 0.001
@@ -27,21 +28,69 @@ local testset = mnist.testdataset()
 print(trainset.size) -- to retrieve the size
 print(testset.size) -- to retrieve the size
 
--- build simple recurrent neural network
-local fwd = nn.GridLSTM(input_k, input_size_x, input_size_y, output_size, rnn_size, n_layers, rho, dropout, should_tie_weights)
-local bwd = fwd:clone()
-bwd:reset() -- reinitializes parameters
--- merges the output of one time-step of fwd and bwd rnns.
--- You could also try nn.AddTable(), nn.Identity(), etc.
-local merge = nn.CAddTable() 
-local brnn = nn.BiSequencer(fwd, bwd, merge)
+-- Preprocessing of building blocks -- 
+
+--- Create Modules
+local grid_1 = nn.GridLSTM(input_k, input_size_x, input_size_y, output_size, rnn_size, n_layers, rho, dropout, should_tie_weights)
+local grid_2 = grid_1:clone() -- Top-Right Corner
+local grid_3 = grid_1:clone() -- Bottom-Left Corner
+local grid_4 = grid_1:clone() -- Bottom-Right Corner
+
+--- Reset clones
+grid_2:reset()
+grid_3:reset()
+grid_4:reset()
+
+--- Build GridLSTM 4 layers that process the data from different corners
+local Seq_1 = nn.Sequencer(grid_1)   -- Top-Left Corner
+local Seq_2 = nn.Sequencer(grid_2)   -- Top-Right Corner
+local Seq_3 = nn.Sequencer(grid_3)   -- Bottom-Left Corner
+local Seq_4 = nn.Sequencer(grid_4)   -- Bottom-Right Corner
+
+--- grid_1 Top-Left Corner Stays the same
+local SeqCorner_1  = Seq_1
+
+--- grid_2 Top-Right Corner
+local SeqCorner_2 = nn.Sequential()
+SeqCorner_2:add(nn.SymmetricTable(input_size_x, input_size_y))   -- Symmetrify
+SeqCorner_2:add(Seq_2)
+SeqCorner_2:add(nn.SymmetricTable(input_size_x, input_size_y))   -- UnSymmetrify
+
+--- grid_3 Bottom-Left Corner
+local SeqCorner_3 = nn.Sequential()
+SeqCorner_3:add(nn.SymmetricTable(input_size_x, input_size_y))   -- Symmetrify
+SeqCorner_3:add(nn.ReverseTable())     -- Reverse
+SeqCorner_3:add(Seq_3)
+SeqCorner_3:add(nn.ReverseTable())     -- Unreverse
+SeqCorner_3:add(nn.SymmetricTable(input_size_x, input_size_y))   -- UnSymmetrify
+
+--- grid_4 Bottom-Right Corner
+local SeqCorner_4 = nn.Sequential()
+SeqCorner_4:add(nn.ReverseTable())     -- Reverse
+SeqCorner_4:add(Seq_4)
+SeqCorner_4:add(nn.ReverseTable())     -- Unreverse
+
+--- Concat everything together
+local concat = nn.ConcatTable()
+concat:add(SeqCorner_1):add(SeqCorner_2):add(SeqCorner_3):add(SeqCorner_4)
+
+--- Init Merger
+-- Need to experiment with CMult
+local merger = nn.Sequencer(nn.CAddTable())  
+
+--- Final Merge
+local gridLSTM = nn.Sequential()
+gridLSTM:add(concat)
+gridLSTM:add(nn.ZipTable())
+gridLSTM:add(merger)
 
 -- internally, rnn will be wrapped into a Recursor to make it an AbstractRecurrent instance.
 model = nn.Sequential()
-model:add(brnn)
+model:add(gridLSTM)
 model:add(nn.JoinTable(1,1))
 model:add(nn.Linear(rnn_size*length, 10))
 model:add(nn.LogSoftMax())
+
 
 print(model)
 
@@ -70,7 +119,6 @@ function next_batch(b_size)
        batch_x[i] = ex.x:type('torch.DoubleTensor')
        batch_y[i] = ex.y+1
    end
-
    batch_x = prepro(batch_x)
 
    local inputs = {}
@@ -78,6 +126,7 @@ function next_batch(b_size)
    for i = 1, length do 
       table.insert(inputs, batch_x[i])
    end
+
    current_batch = current_batch + 1
    return inputs, outputs
 end
@@ -153,7 +202,6 @@ while true do
    local inputs, targets = next_batch(batch_size)
 
    -- 2. forward sequence through rnn
-   
    model:zeroGradParameters() 
    local outputs = model:forward(inputs)
    local err = criterion:forward(outputs, targets)
@@ -170,8 +218,9 @@ while true do
       test(testset)
       
    end
-   i = (i+1)%10
+   i = (i+1)%100
    model:updateParameters(lr)
+   --model:forget() 
    
    iteration = iteration + 1
 end
