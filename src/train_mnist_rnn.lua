@@ -125,7 +125,7 @@ model:add(nn.Linear(hiddenLayer, 10))
 model:add(nn.LogSoftMax())
 
 
-print(model)
+--print(model)
 
 -- build criterion
 criterion = nn.ClassNLLCriterion()--nn.SequencerCriterion(nn.ClassNLLCriterion())
