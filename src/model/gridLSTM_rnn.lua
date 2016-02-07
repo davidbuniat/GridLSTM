@@ -75,7 +75,7 @@ end
 --]]
 
 -- This should be later modified to use nn.FastLSTM
-function lstm(h_x, h_y, h_d, prev_c, rnn_size)
+local function lstm(h_x, h_y, h_d, prev_c, rnn_size)
   local all_input_sums = nn.CAddTable()({h_x, h_y, h_d})
   local reshaped = nn.Reshape(4, rnn_size)(all_input_sums)
   local n1, n2, n3, n4 = nn.SplitTable(2)(reshaped):split(4)

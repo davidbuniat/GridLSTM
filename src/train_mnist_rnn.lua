@@ -3,22 +3,27 @@ require 'model.gridLSTM_rnn'
 require 'optim'
 require 'util.SymmetricTable'
 
+cmd = torch.CmdLine()
+cmd:option('-gpuid',-1,'which gpu to use. -1 = use CPU')
+cmd:option('-seed',123,'torch manual random number generator seed')
+opt = cmd:parse(arg)
+torch.manualSeed(opt.seed)
 
 -- hyper-parameters 
-batchSize = 8
 
-input_size_x = 28
-input_size_y = 28
-input_k = 1
-rnn_size = 64
+input_size_x = 14
+input_size_y = 14
+input_k = 4
+rnn_size = 100
+hiddenLayer = 4096
 output_size = 1
 nIndex = 10
 n_layers = 1
-dropout = 0.5
+dropout = 0 
 should_tie_weights = 0
 lr = 0.001
-length = input_size_x* input_size_y
-batch_size = 8
+length = input_size_x * input_size_y
+batch_size = 32
 rho = length -- sequence length
 local mnist = require 'mnist'
 
@@ -27,6 +32,26 @@ local testset = mnist.testdataset()
 
 print(trainset.size) -- to retrieve the size
 print(testset.size) -- to retrieve the size
+
+ 
+-- initialize cunn/cutorch for training on the GPU and fall back to CPU gracefully
+if opt.gpuid >= 0 then
+    local ok, cunn = pcall(require, 'cunn')
+    local ok2, cutorch = pcall(require, 'cutorch')
+    if not ok then print('package cunn not found!') end
+    if not ok2 then print('package cutorch not found!') end
+    if ok and ok2 then
+        print('using CUDA on GPU ' .. opt.gpuid .. '...')
+        cutorch.setDevice(opt.gpuid + 1) -- note +1 to make it 0 indexed! sigh lua
+        cutorch.manualSeed(opt.seed)
+    else
+        print('If cutorch and cunn are installed, your CUDA toolkit may be improperly configured.')
+        print('Check your CUDA toolkit installation, rebuild cutorch and cunn, and try again.')
+        print('Falling back on CPU mode')
+        opt.gpuid = -1 -- overwrite user setting
+    end
+end
+
 
 -- Preprocessing of building blocks -- 
 
@@ -88,7 +113,8 @@ gridLSTM:add(merger)
 model = nn.Sequential()
 model:add(gridLSTM)
 model:add(nn.JoinTable(1,1))
-model:add(nn.Linear(rnn_size*length, 10))
+model:add(nn.Linear(rnn_size*length, hiddenLayer))
+model:add(nn.Linear(hiddenLayer, 10))
 model:add(nn.LogSoftMax())
 
 
@@ -116,16 +142,26 @@ function next_batch(b_size)
        local x = ex.x -- the input (a 28x28 ByteTensor)
        local y = ex.y -- the label (0--9) 
 
-       batch_x[i] = ex.x:type('torch.DoubleTensor')
+       batch_x[i] = ex.x:type('torch.DoubleTensor')/255
        batch_y[i] = ex.y+1
    end
+
    batch_x = prepro(batch_x)
 
    local inputs = {}
    local outputs = batch_y
-   for i = 1, length do 
-      table.insert(inputs, batch_x[i])
+   local k = 1
+
+   for y = 1, input_size_y do 
+      for x = 1, input_size_x do
+         k = 2*(y-1)*28 + 2*x-1
+         table.insert(inputs, nn.JoinTable(2):forward{batch_x[k], batch_x[k+1], batch_x[k+input_size_x], batch_x[k+input_size_x+1]})
+      end
    end
+
+   --for i = 1, length do 
+   --   table.insert(inputs, batch_x[k])
+   --end
 
    current_batch = current_batch + 1
    return inputs, outputs
@@ -134,15 +170,18 @@ end
 
 -- preprocessing helper function
 function prepro(x)
-    x = x:permute(3,1,2):contiguous() -- swap the axes for faster indexing
-    --y = y:permute(3,1,2):contiguous()
-    return x
+   x = x:permute(3,1,2):contiguous() -- swap the axes for faster indexing
+   if opt.gpuid >= 0 then -- ship the input arrays to GPU
+        -- have to convert to float because integers can't be cuda()'d
+        ---x = x:float():cuda()
+   end
+   return x
 end
 
 
 
 -- test function
-function test(dataset)
+function testing(dataset)
    -- local vars
    local time = sys.clock()
 
@@ -151,7 +190,7 @@ function test(dataset)
    b_size = batch_size
    print('<trainer> on testing Set:')
    for t = 1,dataset.size,b_size do
-      if(c_batch> 50) then break end
+      if(c_batch*b_size> 500) then break end
       batch_x = torch.Tensor(b_size, 1, 28*28)
       batch_y = torch.Tensor(b_size)
       for i = 1, b_size do
@@ -161,7 +200,7 @@ function test(dataset)
           local x = ex.x -- the input (a 28x28 ByteTensor)
           local y = ex.y -- the label (0--9) 
    
-          batch_x[i] = ex.x:type('torch.DoubleTensor')
+          batch_x[i] = ex.x:type('torch.DoubleTensor')/255
           batch_y[i] = ex.y+1
       end
       c_batch = c_batch +1
@@ -169,9 +208,17 @@ function test(dataset)
    
       local inputs = {}
       local outputs = batch_y
-      for i = 1, length do 
-         table.insert(inputs, batch_x[i])
+      local k = 1
+      for y = 1, input_size_y do 
+         for x = 1, input_size_x do
+            k = 2*(y-1)*28 + 2*x-1
+            table.insert(inputs, nn.JoinTable(2):forward{batch_x[k], batch_x[k+1], batch_x[k+input_size_x], batch_x[k+input_size_x+1]})
+         end
       end
+
+      --for i = 1, length do 
+      --   table.insert(inputs, batch_x[i])
+      --end
 
       -- test samples
       local preds = model:forward(inputs)
@@ -200,9 +247,9 @@ local i = 0
 while true do
    -- 1. create a sequence of rho time-steps
    local inputs, targets = next_batch(batch_size)
-
    -- 2. forward sequence through rnn
-   model:zeroGradParameters() 
+   model:zeroGradParameters()
+    
    local outputs = model:forward(inputs)
    local err = criterion:forward(outputs, targets)
    
@@ -215,10 +262,10 @@ while true do
    
    -- 4. update
    if(i==0) then 
-      test(testset)
+      testing(testset)
       
    end
-   i = (i+1)%100
+   i = (i+1)%25
    model:updateParameters(lr)
    --model:forget() 
    
