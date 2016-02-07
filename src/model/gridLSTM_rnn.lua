@@ -186,8 +186,9 @@ function GridLSTM:buildModel()
     	-- Create the lstm gated update pointing in the depth direction.
     	-- We 'prioritize' the depth dimension by using the updated temporal hidden state as input
     	-- instead of the previous temporal hidden state. This implements Section 3.2, "Priority Dimensions"
+    	--local next_c_d, next_h_d = nn.FastLSTM(self.input_size_x, self.rnn_size)(nn.CAddTable()({h_x, h_y, h_d}),  )
     	local next_c_d, next_h_d = lstm(x2h_d, y2h_d, d2h_d, prev_c_d, self.rnn_size)
-	
+
     	-- Pass the depth dimension memory cell and hidden state to layer above
     	table.insert(outputs_d, next_c_d)
     	table.insert(outputs_d, next_h_d)
@@ -196,7 +197,7 @@ function GridLSTM:buildModel()
   	-- set up the decoder
   	local top_h = outputs_d[#outputs_d]
   	if self.dropout > 0 then top_h = nn.Dropout(self.dropout)(top_h) end
-  	--local proj = nn.Linear(self.rnn_size, self.output_size)(top_h):annotate{name='decoder'}
+  	--local top_h = nn.Linear(self.rnn_size, self.output_size)(top_h):annotate{name='decoder'}
   	--local logsoft = nn.LogSoftMax()(proj)
 	
   	table.insert(outputs_t, top_h) --logsoft)

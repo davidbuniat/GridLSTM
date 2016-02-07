@@ -4,10 +4,17 @@ require 'optim'
 require 'util.SymmetricTable'
 
 cmd = torch.CmdLine()
-cmd:option('-gpuid',-1,'which gpu to use. -1 = use CPU')
+cmd:option('-gpuid',0,'which gpu to use. -1 = use CPU')
 cmd:option('-seed',123,'torch manual random number generator seed')
+
+-- optimization
+cmd:option('-learning_rate',0.02,'learning rate')
+cmd:option('-learning_rate_decay',0.97,'learning rate decay')
+cmd:option('-decay_rate',0.95,'decay rate for rmsprop')
+
 opt = cmd:parse(arg)
 torch.manualSeed(opt.seed)
+
 
 -- hyper-parameters 
 
@@ -19,9 +26,9 @@ hiddenLayer = 4096
 output_size = 1
 nIndex = 10
 n_layers = 1
-dropout = 0 
+dropout = 0.5 
 should_tie_weights = 0
-lr = 0.001
+lr = opt.learning_rate
 length = input_size_x * input_size_y
 batch_size = 32
 rho = length -- sequence length
@@ -240,7 +247,7 @@ function testing(dataset)
    confusion:zero()
 end
 
-
+local optim_state = {learningRate = opt.learning_rate, alpha = opt.decay_rate}
 -- training
 local iteration = 1
 local i = 0 
@@ -266,6 +273,16 @@ while true do
       
    end
    i = (i+1)%25
+
+
+   -- exponential learning rate decay
+   if i == 0 and opt.learning_rate_decay < 1 then
+      local decay_factor = opt.learning_rate_decay
+      optim_state.learningRate = optim_state.learningRate * decay_factor -- decay it
+      print('decayed learning rate by a factor ' .. decay_factor .. ' to ' .. optim_state.learningRate)
+      lr = optim_state.learningRate
+   end
+
    model:updateParameters(lr)
    --model:forget() 
    
