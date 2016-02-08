@@ -161,7 +161,7 @@ function GridLSTM:buildModel()
     	-- FIXME: Consider using FastLSTM
     	local next_c_x, next_h_x = lstm(x2h_t, y2h_t, d2h_t, prev_c_x, self.rnn_size)
     	local next_c_y, next_h_y = lstm(x2h_t, y2h_t, d2h_t, prev_c_y, self.rnn_size)
-	
+	    
     	-- Pass memory cell and hidden state to next timestep
     	table.insert(outputs_t, next_c_x)
     	table.insert(outputs_t, next_h_x)
@@ -199,7 +199,7 @@ function GridLSTM:buildModel()
   	-- set up the decoder
     local top_h = outputs_d[#outputs_d]
   	if self.dropout > 0 then top_h = nn.Dropout(self.dropout)(top_h) end
-  	local top_h = nn.Linear(self.rnn_size, self.output_size)(top_h):annotate{name='decoder'}
+  	--local top_h = nn.Linear(self.rnn_size, self.output_size)(top_h):annotate{name='decoder'}
   	--local logsoft = nn.LogSoftMax()(proj)
 	
   	table.insert(outputs_t, top_h) --logsoft)
@@ -260,7 +260,7 @@ function GridLSTM:updateOutput(input)
   local prev_state = getPreviousState(self.step, self.rnn_states, self.n_layers, self.zeroTensor, self.input_size_x)
 
 	--  Feed forward 
-	local input_mem_cell = self.zeroTensor -- this could be choosable 
+	--local input_mem_cell = self.zeroTensor -- this could be choosable 
 	rnn_inputs = {input,input, unpack(prev_state) } -- just in case it was x_input[{xy,{},{}}]
 	local output
 	
@@ -310,16 +310,15 @@ function GridLSTM:_updateGradInput(input, gradOutput)
   end
 
   -- Construct input
-  local input_mem_cell = self.zeroTensor
+  --local input_mem_cell = self.zeroTensor
   local drnn_state = getPreviousState(step, self.drnn_states, self.n_layers, self.zeroTensor, self.input_size_x)
 
-  local inputTable = {input_mem_cell, input, unpack(drnn_state)}
+  local inputTable = {input, input, unpack(drnn_state)}
   local outputTable = {unpack(self.drnn_states[step])}
   table.insert(outputTable, gradOutput)
-  --print(outputTable)
 
   local gradInputTable = recurrentModule:updateGradInput(inputTable, outputTable)
-  --print(recurrentModule:updateGradInput(inputTable, outputTable))
+
   local gradInput = gradInputTable[2]
   self.gradPrevOutput = gradOutput
   local k = 3 -- skipping first two weights as they are input/grad
@@ -346,7 +345,7 @@ function GridLSTM:_accGradParameters(input, gradOutput, scale)
    local recurrentModule = self:getStepModule(step)
    
    	-- Construct input
-   	local input_mem_cell = self.zeroTensor
+   	--local input_mem_cell = self.zeroTensor
    	local drnn_state = getPreviousState(step, self.drnn_states, self.n_layers, self.zeroTensor, self.input_size_x)
 
 

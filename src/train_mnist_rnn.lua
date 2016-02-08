@@ -4,7 +4,7 @@ require 'optim'
 require 'util.SymmetricTable'
 
 cmd = torch.CmdLine()
-cmd:option('-gpuid',0,'which gpu to use. -1 = use CPU')
+cmd:option('-gpuid',-1,'which gpu to use. -1 = use CPU')
 cmd:option('-seed',123,'torch manual random number generator seed')
 
 -- optimization
@@ -17,21 +17,23 @@ torch.manualSeed(opt.seed)
 
 
 -- hyper-parameters 
-
-input_size_x = 14
-input_size_y = 14
-input_k = 4
+p_size = 3
+input_size_x = 9
+input_size_y = 9
+input_k = p_size * p_size
 rnn_size = 100
-hiddenLayer = 4096
-output_size = 1
+hiddenLayer = 2048
+output_size = 100
 nIndex = 10
 n_layers = 1
-dropout = 0.5 
+dropout = 0
 should_tie_weights = 0
 lr = opt.learning_rate
 length = input_size_x * input_size_y
-batch_size = 32
+batch_size = 64
 rho = length -- sequence length
+
+
 local mnist = require 'mnist'
 
 local trainset = mnist.traindataset()
@@ -120,12 +122,12 @@ gridLSTM:add(merger)
 model = nn.Sequential()
 model:add(gridLSTM)
 model:add(nn.JoinTable(1,1))
-model:add(nn.Linear(rnn_size*length, hiddenLayer))
-model:add(nn.Linear(hiddenLayer, 10))
+model:add(nn.Linear(output_size*length, 10))
+model:add(nn.ReLU())
 model:add(nn.LogSoftMax())
 
 
---print(model)
+print(model)
 
 -- build criterion
 criterion = nn.ClassNLLCriterion()--nn.SequencerCriterion(nn.ClassNLLCriterion())
@@ -161,8 +163,18 @@ function next_batch(b_size)
 
    for y = 1, input_size_y do 
       for x = 1, input_size_x do
-         k = 2*(y-1)*28 + 2*x-1
-         table.insert(inputs, nn.JoinTable(2):forward{batch_x[k], batch_x[k+1], batch_x[k+input_size_x], batch_x[k+input_size_x+1]})
+        k = p_size*(y-1)*28 + p_size*(x-1) + 1
+
+        patch  = {}
+        -- Get Patch with p_size
+        for x_p = 0, p_size-1 do 
+           for y_p = 0, p_size-1 do 
+             table.insert(patch, batch_x[k+y_p*p_size+x_p])
+           end 
+         end 
+        --table.insert(inputs, nn.JoinTable(2):forward{batch_x[k], batch_x[k+1], batch_x[k+input_size_x], batch_x[k+input_size_x+1]})
+        table.insert(inputs, nn.JoinTable(2):forward{unpack(patch)})
+      
       end
    end
 
@@ -218,8 +230,18 @@ function testing(dataset)
       local k = 1
       for y = 1, input_size_y do 
          for x = 1, input_size_x do
-            k = 2*(y-1)*28 + 2*x-1
-            table.insert(inputs, nn.JoinTable(2):forward{batch_x[k], batch_x[k+1], batch_x[k+input_size_x], batch_x[k+input_size_x+1]})
+            k = p_size*(y-1)*28 + p_size*(x-1) + 1
+
+            patch  = {}
+            -- Get Patch with p_size
+            for x_p = 0, p_size-1 do 
+               for y_p = 0, p_size-1 do 
+                 table.insert(patch, batch_x[k+y_p*p_size+x_p])
+               end 
+             end 
+            --table.insert(inputs, nn.JoinTable(2):forward{batch_x[k], batch_x[k+1], batch_x[k+input_size_x], batch_x[k+input_size_x+1]})
+            table.insert(inputs, nn.JoinTable(2):forward{unpack(patch)})
+            --table.insert(inputs, nn.JoinTable(2):forward{batch_x[k], batch_x[k+1], batch_x[k+input_size_x], batch_x[k+input_size_x+1]})
          end
       end
 
