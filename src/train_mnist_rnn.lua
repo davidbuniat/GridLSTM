@@ -8,22 +8,22 @@ cmd:option('-gpuid',-1,'which gpu to use. -1 = use CPU')
 cmd:option('-seed',123,'torch manual random number generator seed')
 
 -- optimization
-cmd:option('-learning_rate',0.02,'learning rate')
+cmd:option('-learning_rate',0.01,'learning rate')
 cmd:option('-learning_rate_decay',0.97,'learning rate decay')
 cmd:option('-decay_rate',0.95,'decay rate for rmsprop')
 
 opt = cmd:parse(arg)
 torch.manualSeed(opt.seed)
-
+nngraph.setDebug(false)
 
 -- hyper-parameters 
 p_size = 3
 input_size_x = 9
 input_size_y = 9
 input_k = p_size * p_size
-rnn_size = 100
+rnn_size = 16
 hiddenLayer = 2048
-output_size = 100
+output_size = 9
 nIndex = 10
 n_layers = 1
 dropout = 0
@@ -62,10 +62,21 @@ if opt.gpuid >= 0 then
 end
 
 
--- Preprocessing of building blocks -- 
 
---- Create Modules
-local grid_1 = nn.GridLSTM(input_k, input_size_x, input_size_y, output_size, rnn_size, n_layers, rho, dropout, should_tie_weights)
+-- Preprocessing of building blocks
+local debugger = nn.GridLSTM(input_k, input_size_x, input_size_y, rnn_size, rho, dropout, should_tie_weights, 2)
+
+local input = nn.ConcatTable()
+input:add(nn.Identity())
+input:add(nn.Identity())
+
+local template = nn.Sequential()
+template:add(input)
+template:add(nn.GridLSTM(input_k, input_size_x, input_size_y, output_size, rnn_size, rho, should_tie_weights))
+template:add(nn.JoinTable(1,1))
+
+----- Create Modules
+local grid_1 = template
 local grid_2 = grid_1:clone() -- Top-Right Corner
 local grid_3 = grid_1:clone() -- Bottom-Left Corner
 local grid_4 = grid_1:clone() -- Bottom-Right Corner
@@ -88,7 +99,7 @@ local SeqCorner_1  = Seq_1
 local SeqCorner_2 = nn.Sequential()
 SeqCorner_2:add(nn.SymmetricTable(input_size_x, input_size_y))   -- Symmetrify
 SeqCorner_2:add(Seq_2)
-SeqCorner_2:add(nn.SymmetricTable(input_size_x, input_size_y))   -- UnSymmetrify
+SeqCorner_2:add(nn.SymmetricTable(input_size_x, input_size_y))   -- --UnSymmetrify
 
 --- grid_3 Bottom-Left Corner
 local SeqCorner_3 = nn.Sequential()
@@ -96,7 +107,7 @@ SeqCorner_3:add(nn.SymmetricTable(input_size_x, input_size_y))   -- Symmetrify
 SeqCorner_3:add(nn.ReverseTable())     -- Reverse
 SeqCorner_3:add(Seq_3)
 SeqCorner_3:add(nn.ReverseTable())     -- Unreverse
-SeqCorner_3:add(nn.SymmetricTable(input_size_x, input_size_y))   -- UnSymmetrify
+SeqCorner_3:add(nn.SymmetricTable(input_size_x, input_size_y))   -- --UnSymmetrify
 
 --- grid_4 Bottom-Right Corner
 local SeqCorner_4 = nn.Sequential()
@@ -112,20 +123,42 @@ concat:add(SeqCorner_1):add(SeqCorner_2):add(SeqCorner_3):add(SeqCorner_4)
 -- Need to experiment with CMult
 local merger = nn.Sequencer(nn.CAddTable())  
 
---- Final Merge
+--- Final Merge of for concurrent layers
 local gridLSTM = nn.Sequential()
 gridLSTM:add(concat)
 gridLSTM:add(nn.ZipTable())
 gridLSTM:add(merger)
 
--- internally, rnn will be wrapped into a Recursor to make it an AbstractRecurrent instance.
-model = nn.Sequential()
+--gridLSTM:add(SeqCorner_1)
+--gridLSTM:add(SeqCorner_2)
+--gridLSTM:add(SeqCorner_3)
+--gridLSTM:add(SeqCorner_4)
+
+-- internally, rnn will be wrapped into a Recursor to make it an --AbstractRecurrent instance.
+
+local model = nn.Sequential()
 model:add(gridLSTM)
 model:add(nn.JoinTable(1,1))
-model:add(nn.Linear(output_size*length, 10))
+model:add(nn.Linear(2*output_size*length, 10))
 model:add(nn.ReLU())
 model:add(nn.LogSoftMax())
 
+
+--local input = nn.ConcatTable()
+--input:add(nn.Identity())
+--input:add(nn.Identity())
+--
+--local gridLSTM = nn.Sequential()
+--gridLSTM:add(input)
+--gridLSTM:add(nn.GridLSTM(input_k, input_size_x, input_size_y, rnn_size, o, should_tie_weights))
+--gridLSTM:add(nn.GridLSTM(rnn_size, input_size_x, input_size_y, rnn_size, o, should_tie_weights))
+--gridLSTM:add(nn.JoinTable(1,1))
+--
+--local model = nn.Sequential()
+--model:add(nn.Sequencer(gridLSTM))
+--model:add(nn.JoinTable(1,1))
+--model:add(nn.Linear(2*rnn_size*length, 10))
+--model:add(nn.LogSoftMax()) 
 
 print(model)
 
