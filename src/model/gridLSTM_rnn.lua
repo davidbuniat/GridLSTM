@@ -52,7 +52,7 @@ function GridLSTM:__init(input_unit_size, input_size_x, input_size_y, rnn_size, 
 
   self.rnn_states = {}
   self.drnn_states = {}--{[opt.seq_length] = clone_list(init_state, true)} -- true also zeros the clones
-  for i = -self.input_size_x,self.input_size do -- padding for states
+  for i = -self.input_size_x, self.input_size do -- padding for states
   		self.drnn_states[i] = {}
 	  for j=1,4 do table.insert(self.drnn_states[i], self.zeroTensor) end
   end
@@ -146,6 +146,7 @@ function GridLSTM:buildModel()
   -- Get transformed memory and hidden states pointing in the time direction first
   local next_c_x, next_h_x = lstm(x2h_t, y2h_t, d2h_t, prev_c_x, self.rnn_size)
   local next_c_y, next_h_y = lstm(x2h_t, y2h_t, d2h_t, prev_c_y, self.rnn_size)
+  --local next_c_d, next_h_d = lstm(x2h_t, y2h_t, d2h_t, prev_c_d, self.rnn_size)
 
   -- Evaluate the input sums at once for efficiency
   local x2h_d = nn.Linear(self.rnn_size, 4 * self.rnn_size)(next_h_x):annotate{name='i2h'}:annotate{name='eval_1'}
@@ -184,8 +185,8 @@ end
 
 
 ------------------------- forward backward -----------------------------
-local function getPreviousState(step, state, zeroTensor, input_size_x)
-
+local function getPreviousState(step, state, zeroTensor, input_size_x, backward)
+  local c = backward or 1
   prev_state = {}
   local prev_h_x, prev_c_x, prev_h_y, prev_c_y
 
@@ -194,8 +195,8 @@ local function getPreviousState(step, state, zeroTensor, input_size_x)
     prev_h_x = zeroTensor
     prev_c_x = zeroTensor
   else
-    prev_c_x = state[step-1][1]
-    prev_h_x = state[step-1][2]
+    prev_c_x = state[step-c][1]
+    prev_h_x = state[step-c][2]
   end
 
   -- No input from upper edge
@@ -204,8 +205,8 @@ local function getPreviousState(step, state, zeroTensor, input_size_x)
     prev_c_y = zeroTensor
   else
     -- previous output and cell of this module given Layer
-    prev_c_y = state[step-input_size_x][3]  
-    prev_h_y = state[step-input_size_x][4]
+    prev_c_y = state[step-c*input_size_x][3]  
+    prev_h_y = state[step-c*input_size_x][4]
   end
 
   table.insert(prev_state, prev_c_x)  -- prev x_c 
@@ -227,7 +228,7 @@ function GridLSTM:updateOutput(input)
   end
 
 	-- Concatinate states of previous dimensions x and y into prev_state along each layer
-  local prev_state = getPreviousState(self.step, self.rnn_states, self.zeroTensor, self.input_size_x)
+  local prev_state = getPreviousState(self.step, self.rnn_states, self.zeroTensor, self.input_size_x,1)
 
 	-- Feed forward 
   -- Input[1] for input to Cell dim 
@@ -275,25 +276,23 @@ function GridLSTM:_updateGradInput(input, gradOutput)
   -- backward propagate through this step
   if self.gradPrevOutput then
     self._gradOutputs[step] = nn.rnn.recursiveCopy(self._gradOutputs[step], self.gradPrevOutput)
-    --nn.rnn.recursiveAdd(self._gradOutputs[step], gradOutput)
-    gradOutput =  gradOutput -- self._gradOutputs[step]
+    nn.rnn.recursiveAdd(self._gradOutputs[step], gradOutput)
+    gradOutput = self._gradOutputs[step]
   end
 
   -- Construct input
-  local drnn_state = getPreviousState(step, self.drnn_states, self.zeroTensor, self.input_size_x)
+  local rnn_state = getPreviousState(step, self.rnn_states, self.zeroTensor, self.input_size_x, 1)
+  local drnn_state = getPreviousState(step, self.drnn_states, self.zeroTensor, self.input_size_x, 0)
 
-  local inputTable = {input[1], input[2], unpack(drnn_state)}
-  local outputTable = {unpack(self.drnn_states[step])}
-
-  table.insert(outputTable, gradOutput[1])
-  table.insert(outputTable, gradOutput[2])
+  local inputTable = {input[1], input[2], unpack(rnn_state)}
+  local outputTable = {gradOutput[1], gradOutput[2], unpack(self.drnn_states[step])}
 
   local gradInputTable = recurrentModule:updateGradInput(inputTable, outputTable)
 
   local gradInput = {gradInputTable[1], gradInputTable[2]}
   self.gradPrevOutput = gradOutput
 
-  self.drnn_states[step-1][1] 	= gradInputTable[3]	  -- prev x_c 
+  self.drnn_states[step-1][1] = gradInputTable[3]	  -- prev x_c 
   self.drnn_states[step-1][2] = gradInputTable[4]	  -- prev x_h 
 
   self.drnn_states[step-self.input_size_x][3] = gradInputTable[5]	-- prev y_c 
@@ -314,12 +313,14 @@ function GridLSTM:_accGradParameters(input, gradOutput, scale)
    
   -- Construct input
   --local input_mem_cell = self.zeroTensor
-  local drnn_state = getPreviousState(step, self.drnn_states, self.zeroTensor, self.input_size_x)
+  local rnn_state = getPreviousState(step, self.rnn_states, self.zeroTensor, self.input_size_x, 1)
+  local drnn_state = getPreviousState(step, self.drnn_states, self.zeroTensor, self.input_size_x, 0)
 
-  local inputTable = {input[1],input[2], unpack(drnn_state)}
-  local gradOutput = (step > self.step-2) and gradOutput or self._gradOutputs[step] -- (-self.input_size_x)
+  local inputTable = {input[1],input[2], unpack(rnn_state)}
+  local gradOutput = (step > self.step - self.input_size_x) and gradOutput or self._gradOutputs[step] 
+  -- (-self.input_size_x)
 
-  local gradOutputTable = {gradOutput[1],gradOutput[2], unpack(self.drnn_states[step])}
+  local gradOutputTable = {gradOutput[1], gradOutput[2], unpack(self.drnn_states[step])}
 
   recurrentModule:accGradParameters(inputTable, gradOutputTable, scale)
   
