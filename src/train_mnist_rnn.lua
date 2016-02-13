@@ -212,7 +212,7 @@ model:add(nn.LogSoftMax())
 --      model:add(nn.LogSoftMax())
 --      ------------------------------------------------------------
 
-print(model)
+--print(model)
 
 -- build criterion
 criterion = nn.ClassNLLCriterion()--nn.SequencerCriterion(nn.ClassNLLCriterion())
