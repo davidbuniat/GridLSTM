@@ -8,8 +8,8 @@ cmd:option('-gpuid',-1,'which gpu to use. -1 = use CPU')
 cmd:option('-seed',123,'torch manual random number generator seed')
 
 -- optimization
-cmd:option('-learning_rate',0.01,'learning rate')
-cmd:option('-learning_rate_decay',0.97,'learning rate decay')
+cmd:option('-learning_rate',0.001, ' learning rate')
+cmd:option('-learning_rate_decay',1,'learning rate decay')
 cmd:option('-decay_rate',0.95,'decay rate for rmsprop')
 
 opt = cmd:parse(arg)
@@ -17,12 +17,12 @@ torch.manualSeed(opt.seed)
 nngraph.setDebug(false)
 
 -- hyper-parameters 
-p_size = 3
-input_size_x = 9
-input_size_y = 9
+p_size = 2
+input_size_x = 14
+input_size_y = 14
 input_k = p_size * p_size
-rnn_size = 16
-hiddenLayer = 2048
+rnn_size = 100
+hiddenLayer = 4096
 output_size = 9
 nIndex = 10
 n_layers = 1
@@ -30,7 +30,7 @@ dropout = 0
 should_tie_weights = 0
 lr = opt.learning_rate
 length = input_size_x * input_size_y
-batch_size = 64
+batch_size = 4
 rho = length -- sequence length
 
 
@@ -64,25 +64,51 @@ end
 
 
 -- Preprocessing of building blocks
-local debugger = nn.GridLSTM(input_k, input_size_x, input_size_y, rnn_size, rho, dropout, should_tie_weights, 2)
+--local debugger = nn.GridLSTM(input_k, input_size_x, input_size_y, rnn_size, rho, should_tie_weights, 2) 
 
 local input = nn.ConcatTable()
-input:add(nn.Identity())
-input:add(nn.Identity())
+input:add(nn.Linear(input_k, rnn_size))
+input:add(nn.Linear(input_k, rnn_size))
+
+local connect = nn.ParallelTable()
+connect:add(nn.Linear(rnn_size, input_k))
+connect:add(nn.Linear(rnn_size, input_k))
+
+local connect_hidden = nn.ConcatTable()
+connect_hidden:add(nn.Identity(input_k, rnn_size))
+connect_hidden:add(nn.Identity(input_k, rnn_size))
 
 local template = nn.Sequential()
 template:add(input)
-template:add(nn.GridLSTM(input_k, input_size_x, input_size_y, output_size, rnn_size, rho, should_tie_weights))
-template:add(nn.JoinTable(1,1))
+template:add(nn.GridLSTM(input_size_x, input_size_y, rnn_size, rho, should_tie_weights))
+--template:add(nn.SelectTable(2))
+--template:add(nn.Linear(rnn_size, input_k))
+--template:add(nn.ReLU())
+
+
+--template:add(connect)
+--
+local template_hidden = nn.Sequential()
+--template_hidden:add(connect_hidden)
+template_hidden:add(nn.GridLSTM(input_size_x, input_size_y, rnn_size, rho, should_tie_weights))
+--template_hidden:add(nn.SelectTable(2))
+--template_hidden:add(nn.Linear(rnn_size, input_k))
+--template_hidden:add(nn.ReLU())
+--
+local template_final = nn.Sequential()
+template_final:add(nn.GridLSTM(input_size_x, input_size_y, rnn_size, rho, should_tie_weights))
+template_final:add(nn.JoinTable(1,1))
+--template_final:add(nn.SelectTable(2))
+--template_final:add(nn.Linear(rnn_size, input_k))
 
 ----- Create Modules
 local grid_1 = template
-local grid_2 = grid_1:clone() -- Top-Right Corner
-local grid_3 = grid_1:clone() -- Bottom-Left Corner
-local grid_4 = grid_1:clone() -- Bottom-Right Corner
+local grid_2 = template_hidden -- template_hidden -- Top-Right Corner
+local grid_3 = grid_2:clone()-- Bottom-Left Corner
+local grid_4 = template_final-- Bottom-Right Corner
 
 --- Reset clones
-grid_2:reset()
+--grid_2:reset()
 grid_3:reset()
 grid_4:reset()
 
@@ -116,49 +142,75 @@ SeqCorner_4:add(Seq_4)
 SeqCorner_4:add(nn.ReverseTable())     -- Unreverse
 
 --- Concat everything together
-local concat = nn.ConcatTable()
-concat:add(SeqCorner_1):add(SeqCorner_2):add(SeqCorner_3):add(SeqCorner_4)
+--local concat = nn.ConcatTable()
+--concat:add(SeqCorner_1):add(SeqCorner_2):add(SeqCorner_3):add(SeqCorner_4)
 
 --- Init Merger
 -- Need to experiment with CMult
-local merger = nn.Sequencer(nn.CAddTable())  
+local merger = nn.Sequencer(nn.JoinTable(1,1))  
 
 --- Final Merge of for concurrent layers
 local gridLSTM = nn.Sequential()
-gridLSTM:add(concat)
-gridLSTM:add(nn.ZipTable())
-gridLSTM:add(merger)
+--gridLSTM:add(concat)
+--gridLSTM:add(nn.ZipTable())
+--gridLSTM:add(merger)
 
---gridLSTM:add(SeqCorner_1)
---gridLSTM:add(SeqCorner_2)
---gridLSTM:add(SeqCorner_3)
---gridLSTM:add(SeqCorner_4)
+gridLSTM:add(SeqCorner_1)
+gridLSTM:add(SeqCorner_2)
+gridLSTM:add(SeqCorner_3)
+gridLSTM:add(SeqCorner_4)
 
 -- internally, rnn will be wrapped into a Recursor to make it an --AbstractRecurrent instance.
 
 local model = nn.Sequential()
 model:add(gridLSTM)
 model:add(nn.JoinTable(1,1))
-model:add(nn.Linear(2*output_size*length, 10))
+model:add(nn.Linear(2*rnn_size*length, hiddenLayer))
 model:add(nn.ReLU())
+model:add(nn.Linear(hiddenLayer, 10))
 model:add(nn.LogSoftMax())
 
 
---local input = nn.ConcatTable()
---input:add(nn.Identity())
---input:add(nn.Identity())
---
 --local gridLSTM = nn.Sequential()
 --gridLSTM:add(input)
---gridLSTM:add(nn.GridLSTM(input_k, input_size_x, input_size_y, rnn_size, o, should_tie_weights))
---gridLSTM:add(nn.GridLSTM(rnn_size, input_size_x, input_size_y, rnn_size, o, should_tie_weights))
+--gridLSTM:add(nn.GridLSTM(input_k, input_size_x, input_size_y, rnn_size, o, ould_tie_weights))
+--gridLSTM:add(nn.GridLSTM(rnn_size, input_size_x, input_size_y, rnn_size, o, ould_tie_weights))
 --gridLSTM:add(nn.JoinTable(1,1))
---
+
+--ocal model = nn.Sequential()
+--odel:add(nn.Sequencer(gridLSTM))
+--odel:add(nn.JoinTable(1,1))
+--odel:add(nn.Linear(2*rnn_size*length, 10))
+--odel:add(nn.LogSoftMax()) 
+
 --local model = nn.Sequential()
---model:add(nn.Sequencer(gridLSTM))
 --model:add(nn.JoinTable(1,1))
---model:add(nn.Linear(2*rnn_size*length, 10))
+--model:add(nn.Reshape(1,28,28))
+--model:add(nn.Sequencer(nn.LSTM(input_k, rnn_size)))
+--model:add(nn.Sequencer(nn.LSTM(rnn_size, rnn_size)))
+--model:add(nn.JoinTable(1,1))
+--model:add(nn.Linear(rnn_size*length, 10))
 --model:add(nn.LogSoftMax()) 
+--
+
+--      ------------------------------------------------------------
+--      -- convolutional network 
+--      ------------------------------------------------------------
+--      -- stage 1 : mean suppresion -> filter bank -> squashing -> max pooling
+--      model:add(nn.SpatialConvolutionMM(1, 28, 5, 5))
+--      model:add(nn.Tanh())
+--      model:add(nn.SpatialMaxPooling(3, 3, 3, 3))
+--      -- stage 2 : mean suppresion -> filter bank -> squashing -> max pooling
+--      model:add(nn.SpatialConvolutionMM(28, 64, 5, 5))
+--      model:add(nn.Tanh())
+--      model:add(nn.SpatialMaxPooling(2, 2, 2, 2))
+--      -- stage 3 : standard 2-layer MLP:
+--      model:add(nn.Reshape(64*2*2))
+--      model:add(nn.Linear(64*2*2, 200))
+--      model:add(nn.Tanh())
+--      model:add(nn.Linear(200, 10))
+--      model:add(nn.LogSoftMax())
+--      ------------------------------------------------------------
 
 print(model)
 
@@ -216,6 +268,7 @@ function next_batch(b_size)
    --end
 
    current_batch = current_batch + 1
+   --print(inputs)
    return inputs, outputs
 end
 
@@ -242,7 +295,7 @@ function testing(dataset)
    b_size = batch_size
    print('<trainer> on testing Set:')
    for t = 1,dataset.size,b_size do
-      if(c_batch*b_size> 500) then break end
+      if(c_batch*b_size> 1000) then break end
       batch_x = torch.Tensor(b_size, 1, 28*28)
       batch_y = torch.Tensor(b_size)
       for i = 1, b_size do
@@ -327,7 +380,7 @@ while true do
       testing(testset)
       
    end
-   i = (i+1)%25
+   i = (i+1)%65
 
 
    -- exponential learning rate decay
