@@ -2,6 +2,8 @@ require 'rnn'
 require 'model.gridLSTM_rnn'
 require 'optim'
 require 'util.SymmetricTable'
+require 'image'
+
 
 cmd = torch.CmdLine()
 cmd:option('-gpuid',-1,'which gpu to use. -1 = use CPU')
@@ -30,7 +32,7 @@ dropout = 0
 should_tie_weights = 0
 lr = opt.learning_rate
 length = input_size_x * input_size_y
-batch_size = 4
+batch_size = 128
 rho = length -- sequence length
 
 
@@ -39,10 +41,9 @@ local mnist = require 'mnist'
 local trainset = mnist.traindataset()
 local testset = mnist.testdataset()
 
-print(trainset.size) -- to retrieve the size
-print(testset.size) -- to retrieve the size
 
- 
+ print(trainset.size) -- to retrieve the size
+print(testset.size) -- to retrieve the size
 -- initialize cunn/cutorch for training on the GPU and fall back to CPU gracefully
 if opt.gpuid >= 0 then
     local ok, cunn = pcall(require, 'cunn')
@@ -230,13 +231,13 @@ function next_batch(b_size)
    batch_x = torch.Tensor(b_size, 1, 28*28)
    batch_y = torch.Tensor(b_size)
    for i = 1, b_size do
-       if(current_batch*b_size+i> trainset.size) then break end
+       --if(current_batch*b_size+i> trainset.size) then break end
 
-       local ex = trainset[current_batch*(b_size)+i]
-       local x = ex.x -- the input (a 28x28 ByteTensor)
+       local ex = trainset[(current_batch*(b_size)+i)%trainset.size+1]
+       local x = image.translate(ex.x, torch.random(0, 4), torch.random(0, 4)) -- the input (a 28x28 ByteTensor)
        local y = ex.y -- the label (0--9) 
 
-       batch_x[i] = ex.x:type('torch.DoubleTensor')/255
+       batch_x[i] = x:type('torch.DoubleTensor')/255
        batch_y[i] = ex.y+1
    end
 
@@ -302,10 +303,10 @@ function testing(dataset)
           if(c_batch*b_size+i> dataset.size) then break end
    
           local ex = dataset[c_batch*(b_size)+i]
-          local x = ex.x -- the input (a 28x28 ByteTensor)
+          local x = image.translate(ex.x, torch.random(0, 4), torch.random(0, 4)) -- the input (a 28x28 ByteTensor)
           local y = ex.y -- the label (0--9) 
    
-          batch_x[i] = ex.x:type('torch.DoubleTensor')/255
+          batch_x[i] = x:type('torch.DoubleTensor')/255
           batch_y[i] = ex.y+1
       end
       c_batch = c_batch +1
