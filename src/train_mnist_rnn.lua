@@ -347,7 +347,7 @@ function testing(dataset)
 
    -- timing
    time = sys.clock() - time
-   time = time / c_batch * b_size
+   time = time / (c_batch * b_size)
    print("<trainer> time to test 1 sample = " .. (time*1000) .. 'ms')
 
    -- print confusion matrix
