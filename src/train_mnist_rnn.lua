@@ -42,7 +42,7 @@ local trainset = mnist.traindataset()
 local testset = mnist.testdataset()
 
 
- print(trainset.size) -- to retrieve the size
+print(trainset.size) -- to retrieve the size
 print(testset.size) -- to retrieve the size
 -- initialize cunn/cutorch for training on the GPU and fall back to CPU gracefully
 if opt.gpuid >= 0 then
@@ -356,43 +356,73 @@ function testing(dataset)
    confusion:zero()
 end
 
+x_weights, dl_dx = model:getParameters()
+
+feval = function(x_new)
+    -- copy the weight if are changed
+    if x_weights ~= x_new then
+        x_weights:copy(x_new)
+    end
+    -- select a training batch
+    local inputs, targets = next_batch(batch_size)
+    -- reset gradients (gradients are always accumulated, to accommodate
+    -- batch methods)
+    dl_dx:zero()
+
+    -- evaluate the loss function and its derivative with respect to x_weights, given a mini batch
+    local prediction = model:forward(inputs)
+    local loss_x = criterion:forward(prediction, targets)
+    model:backward(inputs, criterion:backward(prediction, targets))
+
+    return loss_x, dl_dx
+end
+
+adam_params = {
+   learningRate = lr,
+   --learningRateDecay = 1e-4,
+   --weightDecay = 0,
+   --momentum = 0
+}
+
 local optim_state = {learningRate = opt.learning_rate, alpha = opt.decay_rate}
 -- training
 local iteration = 1
 local i = 0 
 while true do
    -- 1. create a sequence of rho time-steps
-   local inputs, targets = next_batch(batch_size)
+   --local inputs, targets = next_batch(batch_size)
    -- 2. forward sequence through rnn
-   model:zeroGradParameters()
+    _, fs = optim.adam(feval,x_weights,adam_params)
+   --model:zeroGradParameters()
     
-   local outputs = model:forward(inputs)
-   local err = criterion:forward(outputs, targets)
+   --local outputs = model:forward(inputs)
+   --local err = criterion:forward(outputs, targets)
    
-   print(string.format("Iteration %d ; NLL err = %f ", iteration, err))
+   
 
    -- 3. backward sequence through rnn (i.e. backprop through time)
    
-   local gradOutputs = criterion:backward(outputs, targets)
-   local gradInputs = model:backward(inputs, gradOutputs)
+   --local gradOutputs = criterion:backward(outputs, targets)
+   --local gradInputs = model:backward(inputs, gradOutputs)
    
    -- 4. update
    if(i==0) then 
+      print(string.format("Iteration %d ; NLL err = %f ", iteration, fs[1]))
       testing(testset)
-      
+      --print('error for iteration ' .. sgd_params.evalCounter  .. ' is ' .. fs[1] / rho)
    end
    i = (i+1)%65
 
 
    -- exponential learning rate decay
-   if i == 0 and opt.learning_rate_decay < 1 then
-      local decay_factor = opt.learning_rate_decay
-      optim_state.learningRate = optim_state.learningRate * decay_factor -- decay it
-      print('decayed learning rate by a factor ' .. decay_factor .. ' to ' .. optim_state.learningRate)
-      lr = optim_state.learningRate
-   end
+   --if i == 0 and opt.learning_rate_decay < 1 then
+   --   local decay_factor = opt.learning_rate_decay
+   --   optim_state.learningRate = optim_state.learningRate * decay_factor -- decay it
+   --   print('decayed learning rate by a factor ' .. decay_factor .. ' to ' .. optim_state.learningRate)
+   --   lr = optim_state.learningRate
+   --end
 
-   model:updateParameters(lr)
+   --model:updateParameters(lr)
    --model:forget() 
    
    iteration = iteration + 1

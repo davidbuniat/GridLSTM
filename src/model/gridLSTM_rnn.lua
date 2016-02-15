@@ -147,12 +147,12 @@ function GridLSTM:buildModel()
   -- Get transformed memory and hidden states pointing in the time direction first
   local next_c_x, next_h_x = lstm(x2h_t, y2h_t, d2h_t, prev_c_x, self.rnn_size)
   local next_c_y, next_h_y = lstm(x2h_t, y2h_t, d2h_t, prev_c_y, self.rnn_size)
-  --local next_c_d, next_h_d = lstm(x2h_t, y2h_t, d2h_t, prev_c_d, self.rnn_size)
+  local next_c_d, next_h_d = lstm(x2h_t, y2h_t, d2h_t, prev_c_d, self.rnn_size)
 
   -- Evaluate the input sums at once for efficiency
-  local x2h_d = nn.Linear(self.rnn_size, 4 * self.rnn_size)(next_h_x):annotate{name='i2h'}:annotate{name='eval_1'}
-  local y2h_d = nn.Linear(self.rnn_size, 4 * self.rnn_size)(next_h_y):annotate{name='i2h'}:annotate{name='eval_2'}
-  local d2h_d = nn.Linear(self.rnn_size, 4 * self.rnn_size)(prev_h_d):annotate{name='h2h'}:annotate{name='eval_2'}
+  --local x2h_d = nn.Linear(self.rnn_size, 4 * self.rnn_size)(next_h_x):annotate{name='i2h'}:annotate{name='eval_1'}
+  --local y2h_d = nn.Linear(self.rnn_size, 4 * self.rnn_size)(next_h_y):annotate{name='i2h'}:annotate{name='eval_2'}
+  --local d2h_d = nn.Linear(self.rnn_size, 4 * self.rnn_size)(prev_h_d):annotate{name='h2h'}:annotate{name='eval_2'}
 	
   -- See section 3.5, "Weight Sharing" of http://arxiv.org/pdf/1507.01526.pdf
   -- The weights along the temporal dimension are already tied (cloned many times in train.lua)
@@ -169,7 +169,7 @@ function GridLSTM:buildModel()
   -- Create the lstm gated update pointing in the depth direction.
   -- We 'prioritize' the depth dimension by using the updated temporal hidden state as input
   -- instead of the previous temporal hidden state. This implements Section 3.2, "Priority Dimensions"
-  local next_c_d, next_h_d = lstm(x2h_d, y2h_d, d2h_d, prev_c_d, self.rnn_size)
+  --local next_c_d, next_h_d = lstm(x2h_d, y2h_d, d2h_d, prev_c_d, self.rnn_size)
 
     -- Pass the depth dimension memory cell and hidden state to layer above
 	table.insert(outputs_t, next_c_d)
