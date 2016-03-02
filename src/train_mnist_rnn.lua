@@ -24,7 +24,7 @@ input_size_x = 9
 input_size_y = 9
 input_k = p_size * p_size
 rnn_size = 100
-hiddenLayer = 2048
+hiddenLayer = 4096
 output_size = 9
 nIndex = 10
 n_layers = 1
@@ -32,7 +32,7 @@ dropout = 0
 should_tie_weights = 0
 lr = opt.learning_rate
 length = input_size_x * input_size_y
-batch_size = 32
+batch_size = 128
 rho = length -- sequence length
 
 
@@ -394,7 +394,6 @@ feval = function(x_new)
     dl_dx:zero()
 
     -- evaluate the loss function and its derivative with respect to x_weights, given a mini batch
-    print(inputs)
     local prediction = model:forward(inputs)
     local loss_x = criterion:forward(prediction, targets)
     model:backward(inputs, criterion:backward(prediction, targets))
@@ -436,7 +435,7 @@ while true do
       testing(testset)
       --print('error for iteration ' .. sgd_params.evalCounter  .. ' is ' .. fs[1] / rho)
    end
-   i = (i+1)%65
+   i = (i+1)%30
 
 
    -- exponential learning rate decay
