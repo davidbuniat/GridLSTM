@@ -6,7 +6,7 @@ require 'image'
 
 
 cmd = torch.CmdLine()
-cmd:option('-gpuid',-1,'which gpu to use. -1 = use CPU')
+cmd:option('-gpuid',0,'which gpu to use. -1 = use CPU')
 cmd:option('-seed',123,'torch manual random number generator seed')
 
 -- optimization
@@ -19,12 +19,12 @@ torch.manualSeed(opt.seed)
 nngraph.setDebug(false)
 
 -- hyper-parameters 
-p_size = 2
-input_size_x = 14
-input_size_y = 14
+p_size = 3
+input_size_x = 9
+input_size_y = 9
 input_k = p_size * p_size
 rnn_size = 100
-hiddenLayer = 4096
+hiddenLayer = 2048
 output_size = 9
 nIndex = 10
 n_layers = 1
@@ -32,7 +32,7 @@ dropout = 0
 should_tie_weights = 0
 lr = opt.learning_rate
 length = input_size_x * input_size_y
-batch_size = 128
+batch_size = 32
 rho = length -- sequence length
 
 
@@ -44,6 +44,7 @@ local testset = mnist.testdataset()
 
 print(trainset.size) -- to retrieve the size
 print(testset.size) -- to retrieve the size
+
 -- initialize cunn/cutorch for training on the GPU and fall back to CPU gracefully
 if opt.gpuid >= 0 then
     local ok, cunn = pcall(require, 'cunn')
@@ -62,11 +63,12 @@ if opt.gpuid >= 0 then
     end
 end
 
-
+zeroTensor = torch.Tensor()
+if opt.gpuid >= 0 then 
+  zeroTensor = torch.CudaTensor()
+end
 
 -- Preprocessing of building blocks
---local debugger = nn.GridLSTM(input_k, input_size_x, input_size_y, rnn_size, rho, should_tie_weights, 2) 
-
 local input = nn.ConcatTable()
 input:add(nn.Linear(input_k, rnn_size))
 input:add(nn.Linear(input_k, rnn_size))
@@ -76,12 +78,20 @@ connect:add(nn.Linear(rnn_size, input_k))
 connect:add(nn.Linear(rnn_size, input_k))
 
 local connect_hidden = nn.ConcatTable()
-connect_hidden:add(nn.Identity(input_k, rnn_size))
-connect_hidden:add(nn.Identity(input_k, rnn_size))
+connect_hidden:add(nn.Linear(rnn_size, rnn_size))
+connect_hidden:add(nn.Linear(rnn_size, rnn_size))
+
+local hidden_relu = nn.ParallelTable()
+hidden_relu:add(nn.ReLU())
+hidden_relu:add(nn.ReLU())
+
+local hidden_relu_2 = nn.ParallelTable()
+hidden_relu_2:add(nn.ReLU())
+hidden_relu_2:add(nn.ReLU())
 
 local template = nn.Sequential()
 template:add(input)
-template:add(nn.GridLSTM(input_size_x, input_size_y, rnn_size, rho, should_tie_weights))
+template:add(nn.GridLSTM(input_size_x, input_size_y, rnn_size, rho, should_tie_weights, zeroTensor))
 --template:add(nn.SelectTable(2))
 --template:add(nn.Linear(rnn_size, input_k))
 --template:add(nn.ReLU())
@@ -90,14 +100,13 @@ template:add(nn.GridLSTM(input_size_x, input_size_y, rnn_size, rho, should_tie_w
 --template:add(connect)
 --
 local template_hidden = nn.Sequential()
---template_hidden:add(connect_hidden)
-template_hidden:add(nn.GridLSTM(input_size_x, input_size_y, rnn_size, rho, should_tie_weights))
+template_hidden:add(nn.GridLSTM(input_size_x, input_size_y, rnn_size, rho, should_tie_weights, zeroTensor))
 --template_hidden:add(nn.SelectTable(2))
 --template_hidden:add(nn.Linear(rnn_size, input_k))
 --template_hidden:add(nn.ReLU())
 --
 local template_final = nn.Sequential()
-template_final:add(nn.GridLSTM(input_size_x, input_size_y, rnn_size, rho, should_tie_weights))
+template_final:add(nn.GridLSTM(input_size_x, input_size_y, rnn_size, rho, should_tie_weights, zeroTensor))
 template_final:add(nn.JoinTable(1,1))
 --template_final:add(nn.SelectTable(2))
 --template_final:add(nn.Linear(rnn_size, input_k))
@@ -106,7 +115,7 @@ template_final:add(nn.JoinTable(1,1))
 local grid_1 = template
 local grid_2 = template_hidden -- template_hidden -- Top-Right Corner
 local grid_3 = grid_2:clone()-- Bottom-Left Corner
-local grid_4 = template_final-- Bottom-Right Corner
+local grid_4 = template_final -- Bottom-Right Corner
 
 --- Reset clones
 --grid_2:reset()
@@ -143,12 +152,12 @@ SeqCorner_4:add(Seq_4)
 SeqCorner_4:add(nn.ReverseTable())     -- Unreverse
 
 --- Concat everything together
---local concat = nn.ConcatTable()
---concat:add(SeqCorner_1):add(SeqCorner_2):add(SeqCorner_3):add(SeqCorner_4)
+local concat = nn.ConcatTable()
+concat:add(SeqCorner_1):add(SeqCorner_2):add(SeqCorner_3):add(SeqCorner_4)
 
 --- Init Merger
 -- Need to experiment with CMult
-local merger = nn.Sequencer(nn.JoinTable(1,1))  
+local merger = nn.Sequencer(nn.CAddTable(1,1))  
 
 --- Final Merge of for concurrent layers
 local gridLSTM = nn.Sequential()
@@ -172,26 +181,26 @@ model:add(nn.Linear(hiddenLayer, 10))
 model:add(nn.LogSoftMax())
 
 
---local gridLSTM = nn.Sequential()
---gridLSTM:add(input)
---gridLSTM:add(nn.GridLSTM(input_k, input_size_x, input_size_y, rnn_size, o, ould_tie_weights))
---gridLSTM:add(nn.GridLSTM(rnn_size, input_size_x, input_size_y, rnn_size, o, ould_tie_weights))
---gridLSTM:add(nn.JoinTable(1,1))
-
---ocal model = nn.Sequential()
---odel:add(nn.Sequencer(gridLSTM))
---odel:add(nn.JoinTable(1,1))
---odel:add(nn.Linear(2*rnn_size*length, 10))
---odel:add(nn.LogSoftMax()) 
-
---local model = nn.Sequential()
---model:add(nn.JoinTable(1,1))
---model:add(nn.Reshape(1,28,28))
---model:add(nn.Sequencer(nn.LSTM(input_k, rnn_size)))
---model:add(nn.Sequencer(nn.LSTM(rnn_size, rnn_size)))
---model:add(nn.JoinTable(1,1))
---model:add(nn.Linear(rnn_size*length, 10))
---model:add(nn.LogSoftMax()) 
+-- local gridLSTM = nn.Sequential()
+-- gridLSTM:add(input)
+-- gridLSTM:add(nn.GridLSTM(input_k, input_size_x, input_size_y, rnn_size, o, ould_tie_weights))
+-- gridLSTM:add(nn.GridLSTM(rnn_size, input_size_x, input_size_y, rnn_size, o, ould_tie_weights))
+-- gridLSTM:add(nn.JoinTable(1,1))
+ 
+-- local model = nn.Sequential()
+-- lodel:add(nn.Sequencer(gridLSTM))
+-- lodel:add(nn.JoinTable(1,1))
+-- lodel:add(nn.Linear(2*rnn_size*length, 10))
+-- lodel:add(nn.LogSoftMax()) 
+ 
+-- local model = nn.Sequential()
+-- model:add(nn.JoinTable(1,1))
+-- model:add(nn.Reshape(1,28,28))
+-- model:add(nn.Sequencer(nn.LSTM(input_k, rnn_size)))
+-- model:add(nn.Sequencer(nn.LSTM(rnn_size, rnn_size)))
+-- model:add(nn.JoinTable(1,1))
+-- model:add(nn.Linear(rnn_size*length, 10))
+-- model:add(nn.LogSoftMax()) 
 --
 
 --      ------------------------------------------------------------
@@ -223,6 +232,10 @@ classes = {'1','2','3','4','5','6','7','8','9','10'}
 confusion = optim.ConfusionMatrix(classes)
 --testLogger = optim.Logger(paths.concat(opt.save, 'test.log'))
 
+if opt.gpuid >= 0 then
+  model:cuda()
+  criterion:cuda()
+end
 
 -- Load Batch
 current_batch = 0
@@ -237,14 +250,14 @@ function next_batch(b_size)
        local x = image.translate(ex.x, torch.random(0, 4), torch.random(0, 4)) -- the input (a 28x28 ByteTensor)
        local y = ex.y -- the label (0--9) 
 
-       batch_x[i] = x:type('torch.DoubleTensor')/255
+       batch_x[i] = x:type('torch.FloatTensor')/255
        batch_y[i] = ex.y+1
    end
 
    batch_x = prepro(batch_x)
 
    local inputs = {}
-   local outputs = batch_y
+   local outputs = batch_y:float():cuda()
    local k = 1
 
    for y = 1, input_size_y do 
@@ -270,6 +283,11 @@ function next_batch(b_size)
 
    current_batch = current_batch + 1
    --print(inputs)
+    if opt.gpuid >= 0 then
+      for i = 1, length do 
+          inputs[i] = inputs[i]:cuda()
+      end
+    end
    return inputs, outputs
 end
 
@@ -279,7 +297,7 @@ function prepro(x)
    x = x:permute(3,1,2):contiguous() -- swap the axes for faster indexing
    if opt.gpuid >= 0 then -- ship the input arrays to GPU
         -- have to convert to float because integers can't be cuda()'d
-        ---x = x:float():cuda()
+        x = x:float():cuda()
    end
    return x
 end
@@ -306,14 +324,14 @@ function testing(dataset)
           local x = image.translate(ex.x, torch.random(0, 4), torch.random(0, 4)) -- the input (a 28x28 ByteTensor)
           local y = ex.y -- the label (0--9) 
    
-          batch_x[i] = x:type('torch.DoubleTensor')/255
+          batch_x[i] = x:type('torch.FloatTensor')/255
           batch_y[i] = ex.y+1
       end
       c_batch = c_batch +1
       batch_x = prepro(batch_x)
    
       local inputs = {}
-      local outputs = batch_y
+      local outputs = batch_y:cuda()
       local k = 1
       for y = 1, input_size_y do 
          for x = 1, input_size_x do
@@ -323,13 +341,19 @@ function testing(dataset)
             -- Get Patch with p_size
             for x_p = 0, p_size-1 do 
                for y_p = 0, p_size-1 do 
-                 table.insert(patch, batch_x[k+y_p*p_size+x_p])
+                 table.insert(patch, batch_x[k+y_p*p_size+x_p]:cuda())
                end 
              end 
             --table.insert(inputs, nn.JoinTable(2):forward{batch_x[k], batch_x[k+1], batch_x[k+input_size_x], batch_x[k+input_size_x+1]})
             table.insert(inputs, nn.JoinTable(2):forward{unpack(patch)})
             --table.insert(inputs, nn.JoinTable(2):forward{batch_x[k], batch_x[k+1], batch_x[k+input_size_x], batch_x[k+input_size_x+1]})
          end
+      end
+
+      if opt.gpuid >= 0 then
+        for i = 1, length do 
+          inputs[i] = inputs[i]:cuda()
+        end
       end
 
       --for i = 1, length do 
@@ -340,7 +364,7 @@ function testing(dataset)
       local preds = model:forward(inputs)
 
       -- confusion:
-      for i = 1,batch_size do
+      for i = 1, batch_size do
          confusion:add(preds[i], outputs[i])
       end
    end
@@ -370,6 +394,7 @@ feval = function(x_new)
     dl_dx:zero()
 
     -- evaluate the loss function and its derivative with respect to x_weights, given a mini batch
+    print(inputs)
     local prediction = model:forward(inputs)
     local loss_x = criterion:forward(prediction, targets)
     model:backward(inputs, criterion:backward(prediction, targets))
@@ -387,7 +412,7 @@ adam_params = {
 local optim_state = {learningRate = opt.learning_rate, alpha = opt.decay_rate}
 -- training
 local iteration = 1
-local i = 0 
+local i = 1
 while true do
    -- 1. create a sequence of rho time-steps
    --local inputs, targets = next_batch(batch_size)
@@ -404,10 +429,10 @@ while true do
    
    --local gradOutputs = criterion:backward(outputs, targets)
    --local gradInputs = model:backward(inputs, gradOutputs)
-   
+   print(string.format("Iteration %d ; NLL err = %f ", iteration, fs[1]))
+      
    -- 4. update
    if(i==0) then 
-      print(string.format("Iteration %d ; NLL err = %f ", iteration, fs[1]))
       testing(testset)
       --print('error for iteration ' .. sgd_params.evalCounter  .. ' is ' .. fs[1] / rho)
    end

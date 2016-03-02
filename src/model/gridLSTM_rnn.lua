@@ -29,7 +29,7 @@ require 'nngraph'
 assert(not nn.GridLSTM, "update nnx package : luarocks install nnx")
 local GridLSTM, parent = torch.class('nn.GridLSTM', 'nn.AbstractRecurrent')
 
-function GridLSTM:__init(input_size_x, input_size_y, rnn_size, rho, should_tie_weights, hidden_layer)
+function GridLSTM:__init(input_size_x, input_size_y, rnn_size, rho, should_tie_weights, zeroTensor)
   self.layer = layer
   parent.__init(self, rho)
 
@@ -39,7 +39,6 @@ function GridLSTM:__init(input_size_x, input_size_y, rnn_size, rho, should_tie_w
   self.input_unit_size = input_unit_size
   self.rnn_size = rnn_size
   self.should_tie_weights = should_tie_weights
-  self.hidden_layer = hidden_layer
   
   -- Build model here
   self.recurrentModule = self:buildModel()
@@ -49,7 +48,7 @@ function GridLSTM:__init(input_size_x, input_size_y, rnn_size, rho, should_tie_w
   self.sharedClones[1] = self.recurrentModule
 
   -- for output(0), cell(0) and gradCell(T)
-  self.zeroTensor = torch.Tensor() 
+  self.zeroTensor = zeroTensor or torch.Tensor() 
 
   self.rnn_states = {}
   self.drnn_states = {}--{[opt.seq_length] = clone_list(init_state, true)} -- true also zeros the clones
@@ -145,6 +144,7 @@ function GridLSTM:buildModel()
   local d2h_t = nn.Linear(self.rnn_size, 4 * self.rnn_size)(prev_h_d):annotate{name='h2h'}
   	
   -- Get transformed memory and hidden states pointing in the time direction first
+
   local next_c_x, next_h_x = lstm(x2h_t, y2h_t, d2h_t, prev_c_x, self.rnn_size)
   local next_c_y, next_h_y = lstm(x2h_t, y2h_t, d2h_t, prev_c_y, self.rnn_size)
   --local next_c_d, next_h_d = lstm(x2h_t, y2h_t, d2h_t, prev_c_d, self.rnn_size)
