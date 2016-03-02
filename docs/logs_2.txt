@@ -1,0 +1,1055 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+davidbuniat@DepthRNN:~/Git/DepthRNN/src$ th train_mnist_rnn.lu
+a
+60000
+10000
+Iteration 1 ; NLL err = 2.305284
+<trainer> on testing Set:
+<trainer> time to test 1 sample = 92.589778127149ms
+ConfusionMatrix:
+[[       0      77       0       0       0       0       0
+   0       0       0]   0.000%    [class: 1]
+ [       0     115       0       0       0       0       0
+   0       0       0]   100.000%  [class: 2]
+ [       0     108       0       0       0       0       0
+   0       0       0]   0.000%    [class: 3]
+ [       0      96       0       0       0       0       0
+   0       0       0]   0.000%    [class: 4]
+ [       0      93       0       0       0       0       0
+   0       0       0]   0.000%    [class: 5]
+ [       0      79       0       0       0       0       0
+   0       0       0]   0.000%    [class: 6]
+ [       0      77       0       0       0       0       0
+   0       0       0]   0.000%    [class: 7]
+ [       0      83       0       0       0       0       0
+   0       0       0]   0.000%    [class: 8]
+ [       0      88       0       0       0       0       0
+   0       0       0]   0.000%    [class: 9]
+ [       0      80       0       0       0       0       0
+   0       0       0]]  0.000%    [class: 10]
+ + average row correct: 10%
+ + average rowUcol correct (VOC measure): 1.2834821641445%
+ + global correct: 12.834821428571%
+% mean class accuracy (test set)12.834821428571
+^[[AIteration 66 ; NLL err = 0.662415
+<trainer> on testing Set:
+<trainer> time to test 1 sample = 51.986318314448ms
+ConfusionMatrix:
+[[      64       0       1       0       0       2       1
+   3       6       0]   83.117%        [class: 1]
+ [       0     105       0       6       1       1       0
+   0       2       0]   91.304%        [class: 2]
+ [       0       4      86       7       1       1       1
+   5       3       0]   79.630%        [class: 3]
+ [       0       3       5      81       1       5       0
+   1       0       0]   84.375%        [class: 4]
+ [       0       0       4       0      59       0       5
+   3       5      17]   63.441%        [class: 5]
+ [       2       1       1      11       2      53       0
+   3       5       1]   67.089%        [class: 6]
+ [       2       0       0       0       3       4      65
+   1       2       0]   84.416%        [class: 7]
+ [       0       1       0       5       0       1       0
+  72       3       1]   86.747%        [class: 8]
+ [       0       1       0       9       1       1       1
+   1      73       1]   82.955%        [class: 9]
+ [       0       0       0       8       3       1       0
+   3       4      61]]  76.250%        [class: 10]
+ + average row correct: 79.932245016098%
+ + average rowUcol correct (VOC measure): 67.354137301445%
+ + global correct: 80.245535714286%
+% mean class accuracy (test set)80.245535714286
+Iteration 131 ; NLL err = 0.456397
+<trainer> on testing Set:
+<trainer> time to test 1 sample = 51.657548639923ms
+ConfusionMatrix:
+[[      71       0       0       0       0       4       0
+   0       0       2]   92.208%   [class: 1]
+ [       0     113       1       0       0       1       0
+   0       0       0]   98.261%   [class: 2]
+ [       2       0     102       1       0       0       1
+   1       1       0]   94.444%   [class: 3]
+ [       0       0       3      79       0       9       0
+   3       1       1]   82.292%   [class: 4]
+ [       0       0       2       0      83       0       0
+   1       0       7]   89.247%   [class: 5]
+ [       1       0       1       1       1      74       0
+   0       1       0]   93.671%   [class: 6]
+ [       0       0       0       0       2       4      71
+   0       0       0]   92.208%   [class: 7]
+ [       0       1       5       1       1       0       0
+  70       0       5]   84.337%   [class: 8]
+ [       1       2       2       1       2       5       1
+   2      71       1]   80.682%   [class: 9]
+ [       0       1       0       2      14       2       0
+   1       0      60]]  75.000%   [class: 10]
+ + average row correct: 88.234992027283%
+ + average rowUcol correct (VOC measure): 79.55934882164%
+ + global correct: 88.616071428571%
+% mean class accuracy (test set)88.616071428571
+Iteration 196 ; NLL err = 0.126349
+<trainer> on testing Set:
+<trainer> time to test 1 sample = 51.841387758031ms
+ConfusionMatrix:
+[[      73       0       0       0       0       1       1
+   0       2       0]   94.805%        [class: 1]
+ [       0     113       0       0       0       0       1
+   0       1       0]   98.261%        [class: 2]
+ [       1       0     103       2       0       0       0
+   0       2       0]   95.370%        [class: 3]
+ [       0       1       1      90       0       3       0
+   1       0       0]   93.750%        [class: 4]
+ [       0       1       0       1      84       0       2
+   0       2       3]   90.323%        [class: 5]
+ [       0       0       0       6       1      69       1
+   0       2       0]   87.342%        [class: 6]
+ [       1       0       0       0       0       2      74
+   0       0       0]   96.104%        [class: 7]
+ [       1       0       2      10       1       0       0
+  65       0       4]   78.313%        [class: 8]
+ [       0       0       1       1       2       1       0
+   0      83       0]   94.318%        [class: 9]
+ [       0       1       0       1       4       0       0
+   0       6      68]]  85.000%        [class: 10]
+ + average row correct: 91.35861158371%
+ + average rowUcol correct (VOC measure): 84.566925168037%
+ + global correct: 91.741071428571%
+% mean class accuracy (test set)91.741071428571
+Iteration 261 ; NLL err = 0.340051
+<trainer> on testing Set:
+<trainer> time to test 1 sample = 50.907770404592ms
+ConfusionMatrix:
+[[      77       0       0       0       0       0       0
+   0       0       0]   100.000%       [class: 1]
+ [       0     111       0       2       0       0       0
+   1       1       0]   96.522%        [class: 2]
+ [       0       0     103       1       0       1       0
+   3       0       0]   95.370%        [class: 3]
+ [       0       1       3      89       0       0       0
+   2       0       1]   92.708%        [class: 4]
+ [       0       0       0       0      85       0       1
+   0       0       7]   91.398%        [class: 5]
+ [       0       0       0       6       0      68       0
+   0       3       2]   86.076%        [class: 6]
+ [       3       0       0       0       1       2      71
+   0       0       0]   92.208%        [class: 7]
+ [       0       0       2       1       0       0       0
+  76       0       4]   91.566%        [class: 8]
+ [       1       0       3       1       2       0       1
+   0      79       1]   89.773%        [class: 9]
+ [       0       0       0       1       0       0       0
+   1       3      75]]  93.750%        [class: 10]
+ + average row correct: 92.93710231781%
+ + average rowUcol correct (VOC measure): 86.984352469444%
+ + global correct: 93.080357142857%
+% mean class accuracy (test set)93.080357142857
+Iteration 326 ; NLL err = 0.085829
+<trainer> on testing Set:
+<trainer> time to test 1 sample = 53.482688497752ms
+ConfusionMatrix:
+[[      76       0       0       0       1       0       0
+   0       0       0]   98.701%        [class: 1]
+ [       0     113       1       0       0       0       0
+   0       1       0]   98.261%        [class: 2]
+ [       0       1     104       1       0       0       1
+   1       0       0]   96.296%        [class: 3]
+ [       0       0       1      91       0       1       0
+   1       1       1]   94.792%        [class: 4]
+ [       0       0       1       0      78       0       0
+   0       1      13]   83.871%        [class: 5]
+ [       0       0       0       3       0      73       0
+   0       3       0]   92.405%        [class: 6]
+ [       3       0       0       0       1       1      72
+   0       0       0]   93.506%        [class: 7]
+ [       1       5       1       1       1       0       0
+  65       0       9]   78.313%        [class: 8]
+ [       2       0       1       0       2       0       1
+   0      80       2]   90.909%        [class: 9]
+ [       0       0       0       0       0       0       0
+   0       0      80]]  100.000%       [class: 10]
+ + average row correct: 92.705500125885%
+ + average rowUcol correct (VOC measure): 86.571109294891%
+ + global correct: 92.857142857143%
+% mean class accuracy (test set)92.857142857143
+Iteration 391 ; NLL err = 0.142399
+<trainer> on testing Set:
+<trainer> time to test 1 sample = 51.695839734748ms
+ConfusionMatrix:
+[[      76       0       1       0       0       0       0
+   0       0       0]   98.701%        [class: 1]
+ [       0     112       1       0       0       0       0
+   1       1       0]   97.391%        [class: 2]
+ [       0       0     107       0       0       0       0
+   1       0       0]   99.074%        [class: 3]
+ [       0       0       1      92       0       1       0
+   1       1       0]   95.833%        [class: 4]
+ [       0       0       1       0      86       0       1
+   0       1       4]   92.473%        [class: 5]
+ [       0       0       0       6       1      68       0
+   0       4       0]   86.076%        [class: 6]
+ [       3       0       0       0       0       1      73
+   0       0       0]   94.805%        [class: 7]
+ [       0       0       0       0       0       0       0
+  81       0       2]   97.590%        [class: 8]
+ [       1       0       3       0       1       0       0
+   0      82       1]   93.182%        [class: 9]
+ [       0       0       0       1       0       0       0
+   2       2      75]]  93.750%        [class: 10]
+ + average row correct: 94.887644648552%
+ + average rowUcol correct (VOC measure): 90.443742871284%
+ + global correct: 95.089285714286%
+% mean class accuracy (test set)95.089285714286
+Iteration 456 ; NLL err = 0.078692
+<trainer> on testing Set:
+<trainer> time to test 1 sample = 51.461398368701ms
+ConfusionMatrix:
+[[      75       0       0       0       1       0       1
+   0       0       0]   97.403%        [class: 1]
+ [       0     113       1       1       0       0       0
+   0       0       0]   98.261%        [class: 2]
+ [       0       1     104       1       0       0       0
+   2       0       0]   96.296%        [class: 3]
+ [       0       0       3      92       0       1       0
+   0       0       0]   95.833%        [class: 4]
+ [       0       0       1       0      80       0       1
+   0       1      10]   86.022%        [class: 5]
+ [       0       0       0       9       0      69       0
+   0       0       1]   87.342%        [class: 6]
+ [       2       0       0       0       0       4      71
+   0       0       0]   92.208%        [class: 7]
+ [       0       0       0       0       0       0       0
+  82       0       1]   98.795%        [class: 8]
+ [       0       0       1       1       0       2       0
+   0      83       1]   94.318%        [class: 9]
+ [       0       1       0       2       1       2       0
+   2       1      71]]  88.750%        [class: 10]
+ + average row correct: 93.522752523422%
+ + average rowUcol correct (VOC measure): 88.169454932213%
+ + global correct: 93.75%
+% mean class accuracy (test set)93.75
+Iteration 521 ; NLL err = 0.127894
+<trainer> on testing Set:
+<trainer> time to test 1 sample = 51.772558595985ms
+ConfusionMatrix:
+[[      76       0       0       0       0       0       0
+   0       0       1]   98.701%        [class: 1]
+ [       0     115       0       0       0       0       0
+   0       0       0]   100.000%       [class: 2]
+ [       0       1     101       1       0       0       0
+   5       0       0]   93.519%        [class: 3]
+ [       0       0       2      94       0       0       0
+   0       0       0]   97.917%        [class: 4]
+ [       0       0       1       0      83       0       1
+   1       0       7]   89.247%        [class: 5]
+ [       0       0       0       4       0      75       0
+   0       0       0]   94.937%        [class: 6]
+ [       3       0       0       0       0       0      74
+   0       0       0]   96.104%        [class: 7]
+ [       0       0       0       3       0       0       0
+  80       0       0]   96.386%        [class: 8]
+ [       0       0       0       4       0       1       0
+   0      82       1]   93.182%        [class: 9]
+ [       0       0       0       1       0       0       0
+   5       0      74]]  92.500%        [class: 10]
+ + average row correct: 95.249176621437%
+ + average rowUcol correct (VOC measure): 91.067082881927%
+ + global correct: 95.3125%
+% mean class accuracy (test set)95.3125
+Iteration 586 ; NLL err = 0.075824
+<trainer> on testing Set:
+<trainer> time to test 1 sample = 51.151255844161ms
+ConfusionMatrix:
+[[      74       0       1       0       0       0       0
+   0       0       2]   96.104%   [class: 1]
+ [       0     115       0       0       0       0       0
+   0       0       0]   100.000%  [class: 2]
+ [       0       1     101       3       0       0       0
+   2       1       0]   93.519%   [class: 3]
+ [       0       0       0      96       0       0       0
+   0       0       0]   100.000%  [class: 4]
+ [       0       0       0       0      88       0       2
+   0       2       1]   94.624%   [class: 5]
+ [       0       0       0       2       0      75       0
+   0       1       1]   94.937%   [class: 6]
+ [       1       0       0       0       0       2      74
+   0       0       0]   96.104%   [class: 7]
+ [       0       0       0       1       2       0       0
+  79       0       1]   95.181%   [class: 8]
+ [       1       0       1       2       1       0       0
+   0      82       1]   93.182%   [class: 9]
+ [       0       0       0       0       0       0       0
+   1       4      75]]  93.750%   [class: 10]
+ + average row correct: 95.739921331406%
+ + average rowUcol correct (VOC measure): 91.935127973557%
+ + global correct: 95.870535714286%
+% mean class accuracy (test set)95.870535714286
+Iteration 651 ; NLL err = 0.011240
+<trainer> on testing Set:
+<trainer> time to test 1 sample = 51.892495015636ms
+ConfusionMatrix:
+[[      77       0       0       0       0       0       0
+   0       0       0]   100.000%  [class: 1]
+ [       0     113       1       1       0       0       0
+   0       0       0]   98.261%   [class: 2]
+ [       0       0     107       0       0       0       0
+   1       0       0]   99.074%   [class: 3]
+ [       0       0       0      94       0       0       0
+   1       1       0]   97.917%   [class: 4]
+ [       0       0       0       0      89       0       2
+   0       0       2]   95.699%   [class: 5]
+ [       0       0       0       2       1      75       0
+   0       1       0]   94.937%   [class: 6]
+ [       4       0       0       0       0       0      73
+   0       0       0]   94.805%   [class: 7]
+ [       0       0       1       1       0       1       0
+  80       0       0]   96.386%   [class: 8]
+ [       1       0       1       0       0       1       0
+   0      84       1]   95.455%   [class: 9]
+ [       0       0       0       0       1       0       0
+   0       2      77]]  96.250%   [class: 10]
+ + average row correct: 96.878252029419%
+ + average rowUcol correct (VOC measure): 93.943464756012%
+ + global correct: 96.986607142857%
+% mean class accuracy (test set)96.986607142857
+Iteration 716 ; NLL err = 0.118008
+<trainer> on testing Set:
+<trainer> time to test 1 sample = 51.747491117567ms
+ConfusionMatrix:
+[[      76       0       0       0       0       0       1
+   0       0       0]   98.701%   [class: 1]
+ [       0     113       0       1       0       0       0
+   1       0       0]   98.261%   [class: 2]
+ [       0       1     107       0       0       0       0
+   0       0       0]   99.074%   [class: 3]
+ [       0       0       0      94       0       0       0
+   1       1       0]   97.917%   [class: 4]
+ [       0       0       0       0      76       0       2
+   2       1      12]   81.720%   [class: 5]
+ [       0       0       0       2       0      74       1
+   1       0       1]   93.671%   [class: 6]
+ [       0       0       0       0       0       1      76
+   0       0       0]   98.701%   [class: 7]
+ [       0       1       0       0       0       0       0
+  82       0       0]   98.795%   [class: 8]
+ [       2       0       1       2       0       0       0
+   1      80       2]   90.909%   [class: 9]
+ [       0       0       0       2       0       0       0
+   1       0      77]]  96.250%   [class: 10]
+ + average row correct: 95.399979352951%
+ + average rowUcol correct (VOC measure): 91.131122708321%
+ + global correct: 95.424107142857%
+% mean class accuracy (test set)95.424107142857
+Iteration 781 ; NLL err = 0.092758
+<trainer> on testing Set:
+<trainer> time to test 1 sample = 51.38336122036ms
+ConfusionMatrix:
+[[      76       0       1       0       0       0       0
+   0       0       0]   98.701%        [class: 1]
+ [       0     114       0       1       0       0       0
+   0       0       0]   99.130%        [class: 2]
+ [       0       0     108       0       0       0       0
+   0       0       0]   100.000%       [class: 3]
+ [       0       0       0      95       0       0       0
+   1       0       0]   98.958%        [class: 4]
+ [       0       0       2       0      82       0       0
+   1       0       8]   88.172%        [class: 5]
+ [       0       0       0       5       0      74       0
+   0       0       0]   93.671%        [class: 6]
+ [       3       0       0       0       1       1      72
+   0       0       0]   93.506%        [class: 7]
+ [       0       0       0       2       0       0       0
+  80       0       1]   96.386%        [class: 8]
+ [       0       0       3       1       0       0       0
+   0      83       1]   94.318%        [class: 9]
+ [       0       0       0       1       0       0       0
+   0       0      79]]  98.750%        [class: 10]
+ + average row correct: 96.159321069717%
+ + average rowUcol correct (VOC measure): 92.794405817986%
+ + global correct: 96.316964285714%
+% mean class accuracy (test set)96.316964285714
+^[[BIteration 846 ; NLL err = 0.095788
+<trainer> on testing Set:
+<trainer> time to test 1 sample = 52.293686661869ms
+ConfusionMatrix:
+[[      76       0       0       0       0       0       1
+   0       0       0]   98.701%   [class: 1]
+ [       0     115       0       0       0       0       0
+   0       0       0]   100.000%  [class: 2]
+ [       0       1     105       0       0       0       0
+   1       1       0]   97.222%   [class: 3]
+ [       0       0       0      95       0       1       0
+   0       0       0]   98.958%   [class: 4]
+ [       0       1       0       0      90       0       1
+   0       0       1]   96.774%   [class: 5]
+ [       0       0       0       1       0      78       0
+   0       0       0]   98.734%   [class: 6]
+ [       1       0       0       0       1       1      74
+   0       0       0]   96.104%   [class: 7]
+ [       0       0       0       0       1       0       0
+  82       0       0]   98.795%   [class: 8]
+ [       0       0       1       1       1       0       0
+   0      85       0]   96.591%   [class: 9]
+ [       0       0       0       1       1       0       0
+   0       4      74]]  92.500%   [class: 10]
+ + average row correct: 97.43802011013%
+ + average rowUcol correct (VOC measure): 95.114197731018%
+ + global correct: 97.544642857143%
+% mean class accuracy (test set)97.544642857143
+Iteration 911 ; NLL err = 0.075588
+<trainer> on testing Set:
+<trainer> time to test 1 sample = 52.155593642965ms
+ConfusionMatrix:
+[[      76       0       1       0       0       0       0
+   0       0       0]   98.701%        [class: 1]
+ [       0     113       0       0       0       0       0
+   1       1       0]   98.261%        [class: 2]
+ [       0       0     103       0       0       0       1
+   3       0       1]   95.370%        [class: 3]
+ [       0       0       0      92       0       4       0
+   0       0       0]   95.833%        [class: 4]
+ [       0       0       0       0      90       0       1
+   0       0       2]   96.774%        [class: 5]
+ [       0       0       0       1       0      77       0
+   0       0       1]   97.468%        [class: 6]
+ [       2       0       0       0       0       1      74
+   0       0       0]   96.104%        [class: 7]
+ [       0       0       0       0       1       0       0
+  82       0       0]   98.795%        [class: 8]
+ [       0       0       1       0       0       0       0
+   0      86       1]   97.727%        [class: 9]
+ [       0       0       0       0       0       0       0
+   0       1      79]]  98.750%        [class: 10]
+ + average row correct: 97.378476262093%
+ + average rowUcol correct (VOC measure): 94.677696824074%
+ + global correct: 97.321428571429%
+% mean class accuracy (test set)97.321428571429
+Iteration 976 ; NLL err = 0.030248
+<trainer> on testing Set:
+<trainer> time to test 1 sample = 52.068041171879ms
+ConfusionMatrix:
+[[      77       0       0       0       0       0       0
+   0       0       0]   100.000%       [class: 1]
+ [       0     114       0       0       0       0       0
+   1       0       0]   99.130%        [class: 2]
+ [       0       1     104       2       0       0       0
+   1       0       0]   96.296%        [class: 3]
+ [       0       0       0      95       0       1       0
+   0       0       0]   98.958%        [class: 4]
+ [       0       0       0       0      91       0       1
+   0       0       1]   97.849%        [class: 5]
+ [       0       0       0       1       0      78       0
+   0       0       0]   98.734%        [class: 6]
+ [       3       0       0       0       0       2      72
+   0       0       0]   93.506%        [class: 7]
+ [       0       1       0       0       1       0       0
+  81       0       0]   97.590%        [class: 8]
+ [       0       0       1       0       0       0       0
+   0      87       0]   98.864%        [class: 9]
+ [       0       0       0       0       1       0       0
+   1       0      78]]  97.500%        [class: 10]
+ + average row correct: 97.842919826508%
+ + average rowUcol correct (VOC measure): 95.762343406677%
+ + global correct: 97.879464285714%
+% mean class accuracy (test set)97.879464285714
+Iteration 1041 ; NLL err = 0.046571
+<trainer> on testing Set:
+<trainer> time to test 1 sample = 52.396581042558ms
+ConfusionMatrix:
+[[      77       0       0       0       0       0       0
+   0       0       0]   100.000%       [class: 1]
+ [       0     114       0       0       0       0       0
+   1       0       0]   99.130%        [class: 2]
+ [       0       1     102       0       0       0       0
+   5       0       0]   94.444%        [class: 3]
+ [       0       0       0      95       0       1       0
+   0       0       0]   98.958%        [class: 4]
+ [       0       0       0       0      91       0       1
+   0       0       1]   97.849%        [class: 5]
+ [       0       0       0       0       1      77       1
+   0       0       0]   97.468%        [class: 6]
+ [       3       0       0       0       0       0      74
+   0       0       0]   96.104%        [class: 7]
+ [       1       2       1       1       1       0       0
+  77       0       0]   92.771%        [class: 8]
+ [       2       0       4       0       1       0       0
+   1      78       2]   88.636%        [class: 9]
+ [       0       0       0       0       1       0       0
+   0       0      79]]  98.750%        [class: 10]
+ + average row correct: 96.411236524582%
+ + average rowUcol correct (VOC measure): 93.06928396225%
+ + global correct: 96.428571428571%
+% mean class accuracy (test set)96.428571428571
+Iteration 1106 ; NLL err = 0.019886
+<trainer> on testing Set:
+<trainer> time to test 1 sample = 53.93592081964ms
+ConfusionMatrix:
+[[      77       0       0       0       0       0       0
+   0       0       0]   100.000%       [class: 1]
+ [       0     114       0       1       0       0       0
+   0       0       0]   99.130%        [class: 2]
+ [       0       0     107       0       0       0       0
+   1       0       0]   99.074%        [class: 3]
+ [       0       0       0      95       0       1       0
+   0       0       0]   98.958%        [class: 4]
+ [       0       0       0       0      86       0       2
+   0       1       4]   92.473%        [class: 5]
+ [       0       0       0       2       0      77       0
+   0       0       0]   97.468%        [class: 6]
+ [       2       0       0       0       1       1      73
+   0       0       0]   94.805%        [class: 7]
+ [       0       0       0       0       0       1       0
+  81       0       1]   97.590%        [class: 8]
+ [       0       0       1       0       0       0       0
+   0      87       0]   98.864%        [class: 9]
+ [       0       1       0       0       1       0       0
+   0       1      77]]  96.250%        [class: 10]
+ + average row correct: 97.461349964142%
+ + average rowUcol correct (VOC measure): 95.038624405861%
+ + global correct: 97.544642857143%
+% mean class accuracy (test set)97.544642857143
+Iteration 1171 ; NLL err = 0.037456
+<trainer> on testing Set:
+<trainer> time to test 1 sample = 52.651166217402ms
+ConfusionMatrix:
+[[      77       0       0       0       0       0       0
+   0       0       0]   100.000%       [class: 1]
+ [       0     114       0       0       0       0       0
+   1       0       0]   99.130%        [class: 2]
+ [       0       1     103       1       0       0       0
+   3       0       0]   95.370%        [class: 3]
+ [       0       0       0      96       0       0       0
+   0       0       0]   100.000%       [class: 4]
+ [       0       0       0       0      91       0       1
+   0       0       1]   97.849%        [class: 5]
+ [       0       0       0       0       0      79       0
+   0       0       0]   100.000%       [class: 6]
+ [       2       0       0       0       1       2      72
+   0       0       0]   93.506%        [class: 7]
+ [       0       0       0       0       0       0       0
+  83       0       0]   100.000%       [class: 8]
+ [       0       0       0       1       0       0       0
+   0      86       1]   97.727%        [class: 9]
+ [       0       0       0       0       1       0       0
+   1       1      77]]  96.250%        [class: 10]
+ + average row correct: 97.983403205872%
+ + average rowUcol correct (VOC measure): 95.955163836479%
+ + global correct: 97.991071428571%
+% mean class accuracy (test set)97.991071428571
+Iteration 1236 ; NLL err = 0.021477
+<trainer> on testing Set:
+<trainer> time to test 1 sample = 52.113556535915ms
+ConfusionMatrix:
+[[      77       0       0       0       0       0       0
+   0       0       0]   100.000%       [class: 1]
+ [       0     113       1       1       0       0       0
+   0       0       0]   98.261%        [class: 2]
+ [       0       1     103       2       0       0       0
+   2       0       0]   95.370%        [class: 3]
+ [       0       0       0      95       0       1       0
+   0       0       0]   98.958%        [class: 4]
+ [       0       0       0       0      88       0       2
+   1       0       2]   94.624%        [class: 5]
+ [       0       0       0       1       0      77       1
+   0       0       0]   97.468%        [class: 6]
+ [       3       0       0       0       0       0      74
+   0       0       0]   96.104%        [class: 7]
+ [       0       1       0       0       1       0       0
+  81       0       0]   97.590%        [class: 8]
+ [       0       0       1       1       0       0       0
+   0      85       1]   96.591%        [class: 9]
+ [       0       0       0       1       0       0       0
+   0       3      76]]  95.000%        [class: 10]
+ + average row correct: 96.996673941612%
+ + average rowUcol correct (VOC measure): 94.113073348999%
+ + global correct: 96.986607142857%
+% mean class accuracy (test set)96.986607142857
+Iteration 1301 ; NLL err = 0.025332
+<trainer> on testing Set:
+<trainer> time to test 1 sample = 51.881917985156ms
+ConfusionMatrix:
+[[      77       0       0       0       0       0       0
+   0       0       0]   100.000%       [class: 1]
+ [       0     113       0       1       0       0       0
+   1       0       0]   98.261%        [class: 2]
+ [       0       0     102       2       0       0       0
+   4       0       0]   94.444%        [class: 3]
+ [       0       0       0      96       0       0       0
+   0       0       0]   100.000%       [class: 4]
+ [       0       0       1       0      90       0       0
+   0       0       2]   96.774%        [class: 5]
+ [       0       0       0       3       0      70       0
+   0       2       4]   88.608%        [class: 6]
+ [       0       0       0       0       0       1      76
+   0       0       0]   98.701%        [class: 7]
+ [       0       1       0       0       0       0       0
+  80       0       2]   96.386%        [class: 8]
+ [       0       0       1       0       0       0       0
+   0      87       0]   98.864%        [class: 9]
+ [       0       0       0       0       0       0       0
+   0       0      80]]  100.000%       [class: 10]
+ + average row correct: 97.203757762909%
+ + average rowUcol correct (VOC measure): 94.571905136108%
+ + global correct: 97.209821428571%
+% mean class accuracy (test set)97.209821428571
+Iteration 1366 ; NLL err = 0.028841
+<trainer> on testing Set:
+<trainer> time to test 1 sample = 52.180783124641ms
+ConfusionMatrix:
+[[      77       0       0       0       0       0       0
+   0       0       0]   100.000%        [class: 1]
+ [       0     112       0       1       0       0       0
+   1       1       0]   97.391%         [class: 2]
+ [       0       1     103       0       0       0       0
+   4       0       0]   95.370%         [class: 3]
+ [       0       0       0      94       0       2       0
+   0       0       0]   97.917%         [class: 4]
+ [       0       0       1       0      89       0       1
+   0       1       1]   95.699%         [class: 5]
+ [       0       0       0       1       0      76       0
+   0       2       0]   96.203%         [class: 6]
+ [       1       0       0       0       0       0      76
+   0       0       0]   98.701%         [class: 7]
+ [       0       0       0       0       0       0       0
+  83       0       0]   100.000%        [class: 8]
+ [       0       0       1       0       0       0       0
+   0      86       1]   97.727%         [class: 9]
+ [       0       0       0       0       0       0       0
+   0       0      80]]  100.000%        [class: 10]
+ + average row correct: 97.900837063789%
+ + average rowUcol correct (VOC measure): 95.714380145073%
+ + global correct: 97.767857142857%
+% mean class accuracy (test set)97.767857142857
+Iteration 1431 ; NLL err = 0.037521
+<trainer> on testing Set:
+<trainer> time to test 1 sample = 53.698239382356ms
+ConfusionMatrix:
+[[      77       0       0       0       0       0       0
+   0       0       0]   100.000%        [class: 1]
+ [       0     114       0       0       0       0       0
+   1       0       0]   99.130%         [class: 2]
+ [       0       1     106       0       0       0       0
+   1       0       0]   98.148%         [class: 3]
+ [       0       0       0      96       0       0       0
+   0       0       0]   100.000%        [class: 4]
+ [       0       0       0       0      90       0       1
+   1       0       1]   96.774%         [class: 5]
+ [       0       0       0       1       1      74       0
+   0       2       1]   93.671%         [class: 6]
+ [       1       0       0       0       0       0      75
+   0       0       1]   97.403%         [class: 7]
+ [       0       0       0       0       0       0       0
+  81       0       2]   97.590%         [class: 8]
+ [       0       0       3       0       0       0       0
+   0      85       0]   96.591%         [class: 9]
+ [       0       0       0       0       1       0       0
+   0       1      78]]  97.500%         [class: 10]
+ + average row correct: 97.680752873421%
+ + average rowUcol correct (VOC measure): 95.537729859352%
+ + global correct: 97.767857142857%
+% mean class accuracy (test set)97.767857142857
+
