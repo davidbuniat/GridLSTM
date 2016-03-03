@@ -19,9 +19,9 @@ torch.manualSeed(opt.seed)
 nngraph.setDebug(false)
 
 -- hyper-parameters 
-p_size = 3
-input_size_x = 9
-input_size_y = 9
+p_size = 2
+input_size_x = 14
+input_size_y = 14
 input_k = p_size * p_size
 rnn_size = 100
 hiddenLayer = 4096
@@ -120,7 +120,7 @@ local grid_4 = template_final -- Bottom-Right Corner
 --- Reset clones
 --grid_2:reset()
 grid_3:reset()
-grid_4:reset()
+--grid_4:reset()
 
 --- Build GridLSTM 4 layers that process the data from different corners
 local Seq_1 = nn.Sequencer(grid_1)   -- Top-Left Corner
