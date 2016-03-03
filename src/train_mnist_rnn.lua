@@ -314,7 +314,7 @@ function testing(dataset)
    b_size = batch_size
    print('<trainer> on testing Set:')
    for t = 1,dataset.size,b_size do
-      if(c_batch*b_size> 1000) then break end
+      if(c_batch*b_size> 9000) then break end
       batch_x = torch.Tensor(b_size, 1, 28*28)
       batch_y = torch.Tensor(b_size)
       for i = 1, b_size do
@@ -435,7 +435,7 @@ while true do
       testing(testset)
       --print('error for iteration ' .. sgd_params.evalCounter  .. ' is ' .. fs[1] / rho)
    end
-   i = (i+1)%30
+   i = (i+1)%8
 
 
    -- exponential learning rate decay
