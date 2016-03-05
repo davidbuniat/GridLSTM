@@ -19,9 +19,9 @@ torch.manualSeed(opt.seed)
 nngraph.setDebug(false)
 
 -- hyper-parameters 
-p_size = 2
-input_size_x = 14
-input_size_y = 14
+p_size = 1
+input_size_x = 28
+input_size_y = 28
 input_k = p_size * p_size
 rnn_size = 100
 hiddenLayer = 4096
@@ -67,6 +67,10 @@ zeroTensor = torch.Tensor()
 if opt.gpuid >= 0 then 
   zeroTensor = torch.CudaTensor()
 end
+
+--      ------------------------------------------------------------
+--      GridLSTM
+--      ------------------------------------------------------------
 
 -- Preprocessing of building blocks
 local input = nn.ConcatTable()
@@ -180,32 +184,12 @@ model:add(nn.ReLU())
 model:add(nn.Linear(hiddenLayer, 10))
 model:add(nn.LogSoftMax())
 
-
--- local gridLSTM = nn.Sequential()
--- gridLSTM:add(input)
--- gridLSTM:add(nn.GridLSTM(input_k, input_size_x, input_size_y, rnn_size, o, ould_tie_weights))
--- gridLSTM:add(nn.GridLSTM(rnn_size, input_size_x, input_size_y, rnn_size, o, ould_tie_weights))
--- gridLSTM:add(nn.JoinTable(1,1))
- 
--- local model = nn.Sequential()
--- lodel:add(nn.Sequencer(gridLSTM))
--- lodel:add(nn.JoinTable(1,1))
--- lodel:add(nn.Linear(2*rnn_size*length, 10))
--- lodel:add(nn.LogSoftMax()) 
- 
--- local model = nn.Sequential()
--- model:add(nn.JoinTable(1,1))
--- model:add(nn.Reshape(1,28,28))
--- model:add(nn.Sequencer(nn.LSTM(input_k, rnn_size)))
--- model:add(nn.Sequencer(nn.LSTM(rnn_size, rnn_size)))
--- model:add(nn.JoinTable(1,1))
--- model:add(nn.Linear(rnn_size*length, 10))
--- model:add(nn.LogSoftMax()) 
---
-
 --      ------------------------------------------------------------
 --      -- convolutional network 
 --      ------------------------------------------------------------
+--      local model = nn.Sequential()
+--      model:add(nn.JoinTable(1,1))
+--      model:add(nn.Reshape(1,28,28))
 --      -- stage 1 : mean suppresion -> filter bank -> squashing -> max pooling
 --      model:add(nn.SpatialConvolutionMM(1, 28, 5, 5))
 --      model:add(nn.Tanh())
@@ -314,8 +298,8 @@ function testing(dataset)
    b_size = batch_size
    print('<trainer> on testing Set:')
    for t = 1,dataset.size,b_size do
-      if(c_batch*b_size> 9000) then break end
-      batch_x = torch.Tensor(b_size, 1, 28*28)
+      if(c_batch*b_size> 1000) then break end
+     batch_x = torch.Tensor(b_size, 1, 28*28)
       batch_y = torch.Tensor(b_size)
       for i = 1, b_size do
           if(c_batch*b_size+i> dataset.size) then break end
@@ -435,7 +419,7 @@ while true do
       testing(testset)
       --print('error for iteration ' .. sgd_params.evalCounter  .. ' is ' .. fs[1] / rho)
    end
-   i = (i+1)%8
+   i = (i+1)%66
 
 
    -- exponential learning rate decay
