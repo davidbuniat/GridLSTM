@@ -11,7 +11,7 @@ require 'torch'
 require 'lfs'
 --require 'cudnn'
 
-nngraph.setDebug(false)
+nngraph.setDebug(true)
 
 local data = require 'data.afreight'
 local GridLstm = require 'model.GridLSTM'
@@ -26,7 +26,7 @@ cmd:option('-mb', 8, 'minibatch size')
 cmd:option('-iters', 100000, 'number of iterations')
 
 -- input params
-cmd:option('-n_data', 455, 'Number of the data')
+cmd:option('-n_data', 45, 'Number of the data')
 cmd:option('-n_x', 16, 'width of the image')
 cmd:option('-n_y', 16, 'height of the image')
 

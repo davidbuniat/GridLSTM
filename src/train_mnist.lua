@@ -266,6 +266,8 @@ function feval(x)
         	loss = loss + clones.criterion[xy]:forward(predictions[xy], y_out)
        	end
     end
+
+    --Forward wire up
     loss = loss / opt.seq_length
 
     ------------------ backward pass -------------------
