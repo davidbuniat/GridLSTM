@@ -7,8 +7,8 @@ local data = {}
 data.__index = data
 
 print(sys.COLORS.red ..  '==> loading dataset')
-images = matio.load('../datasets/NYU2/nyu_dataset.mat', 'rgbs');
-labels = matio.load('../datasets/NYU2/nyu_dataset.mat', 'labels');
+images = matio.load('nyu_dataset.mat', 'rgbs');
+labels = matio.load('nyu_dataset.mat', 'labels');
 
 print '==> preprocessing data'
 
