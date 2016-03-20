@@ -1,0 +1,110 @@
+Feb 10,2016 - Davit Buniatyan
+
+Overfitting 
+
+We need to prove that the model is working. For that we should overfit the model and give the training set as testing to see how it behaves. 
+
+Exp 1 2,500 test and train
+
+We use 4 pararell GridLSTM layers. Here are the results per 25 iteration (with batch size 32) and the testing set is 2500 samples from training set
+
+1 	acc: 11.4%
+25 	acc: 65.8%
+50 	acc: 79.4%
+75 	acc: 75.4% <- Testing set is already trained
+100 acc: 73.9%
+125 acc: 81.5%
+150 acc: 75.1%
+
+
+Exp 2 10,000 test and train
+
+We use 4 pararell GridLSTM layers. Here are the results per 25 iteration (with batch size 32) and the testing set is 10,000 samples from training set
+
+1 	acc: 11.4%
+25 	acc: 64.7%
+50 	acc: 77.2%
+75 	acc: 72.9%
+100 acc: 73.2%
+125 acc: 81.3%
+150 acc: 74.4%
+175 acc: 74.9%
+200 acc: 77.8%
+225 acc: 82.6%
+250 acc: 82.5%
+275 acc: 74.3%
+300 acc: 78.1% <- Testing set is lready trained
+325 acc: 82.2%
+350 acc: 80.7%
+375 acc: 76.6%
+
+Exp 3 10,000 test and train
+
+We use one GridLSTM layer and 10000 training set
+
+1  	acc: 9.9%
+25 	acc: 55.1%
+50 	acc: 70.8%
+75 	acc: 75.2%
+100 acc: 80.5%
+125 acc: 82.4%
+150 acc: 79.6%
+175 acc: 83.2%
+200 acc: 82.4%
+225 acc: 85.6%
+250 acc: 86.6%
+275 acc: 83.1%
+300 acc: 84.0% <- Testing set is already trained
+325 acc: 86.2%
+350 acc: 86.1%
+375 acc: 87.9%
+400 acc: 87.8%
+425 acc: 88.1%
+450 acc: 87.8%
+
+
+Exp 4 10,000 test and train
+
+The same as experiment 3 but with Recursive addition of gradientOutput is taken out
+
+1  	acc: 9.9%
+25 	acc: 28.9%
+50 	acc: 67.9%
+75 	acc: 68.3%
+100 acc: 73.2%
+125 acc: 76.1%
+150 acc: 74.7%
+175 acc: 77.6%
+200 acc: 79.2%
+225 acc: 82.1%
+250 acc: 82.5%
+275 acc: 81.5%
+300 acc: 82.1% <- Testing set is already trained
+325 acc: 83.2%
+350 acc: 84.5%
+375 acc: 85.5%
+400 acc: 86.7%
+425 acc: 86.5%
+450 acc: 86.1%
+475 acc: 86.7%
+500 acc: 86.5%
+
+
+Exp 5 
+
+Changing Grad output table order and results similiar to Exp 4
+
+Exp 6
+
+Returning recursive addition of gradient output
+
+Conclusions seems the model is broken
+Assumptions where it is broken, in passing gradients of previous inputs/outputs
+
+Review:
+
+Seems corrected gradient passing from previous inputs/outputs plus added RNN previous input steps that totally lacked now we will test the model
+
+
+
+

@@ -1,0 +1,24 @@
+
+2D GridLSTM
+
+Yesterday we have implemented 2D GridLSTM, now we are dubugging it. Seems the problem is in the gradient calculations. It is exploding
+
+
+Exp 1 
+
+One layer of LSTM and one layer of gridLSTM 
+
+
+Exp 2 
+
+Two layers of LSTM and two layers of gridLSTM.
+Experiment showed that tying of depth dimension actually doesn't work.
+
+Rewrote gridLSTM in more correct manner and now it works
+
+Tomorrow should write report about my two day experiments. And try to build train_mnist_with nngraph
+	
+	
+	
+	
+	

@@ -1,0 +1,78 @@
+Feb 11
+
+Yesterday we ahave super changed gridLSTM derivative handling. For today we should restart the previous overfitting experiment to see how goes with the current model.
+
+Exp 1
+There is only one layer with 100 lstm. The testing set contains 3000 samples which is from training set. 
+
+Results 
+
+1 	acc: 7.3%
+25 	acc: 76.8%
+50 	acc: 84.2%
+75 	acc: 84.3%
+100 acc: 86.4% <- Testing set is lready trained
+125 acc: 85.7%
+150 acc: 85.6%
+...
+
+
+Exp 2 
+
+Taking out Primary Dimensions
+
+1 	acc: 10.1%
+25 	acc: 77.0%
+50 	acc: 84.4%
+75 	acc: 83.9%
+100 acc: 86.2% <- Testing set is lready trained
+125 acc: 85.7%
+150 acc: 85.6%
+...
+
+Exp 3 
+
+Recursive adding of grad output added
+
+1 	acc: 7.3%
+25 	acc: 60.5%
+50 	acc: 74.3%
+75 	acc: 74.3%
+100 acc: 77.6% <- Testing set is lready trained
+125 acc: 79.0%
+150 acc: 85.6%
+...
+
+Exp 4
+
+Taking future drnn states. Exactly the same as Exp 3
+
+
+Exp 5
+
+Test as much as train: the point is to give the same examples for testing how much it iwas for training
+
+
+1 	acc: 0%
+25 	acc: 32.4%
+50 	acc: 49.1%
+75 	acc: 60.4%
+100 acc: 65.9% <- Testing set is lready trained
+125 acc: 68.3%
+150 acc: 64.4%
+150 acc: 68.3%
+150 acc: 70.2%
+...
+175 acc: 75.1%
+250 acc: 73.7%
+...
+
+
+2D GridLSTM 
+
+Conclusion even heavy modifications of the algorithm hasn't helped much. Now we move to 1D implementation.
+
+
+
+
+
