@@ -19,12 +19,12 @@ torch.manualSeed(opt.seed)
 nngraph.setDebug(false)
 
 -- hyper-parameters 
-p_size = 1
-input_size_x = 38
-input_size_y = 51
-n_labels = 2
+p_size = 4
+input_size_x = 13
+input_size_y = 9
+n_labels = 894
 input_k = p_size * p_size * 3
-rnn_size = 1
+rnn_size = 10
 hiddenLayer = 40
 output_size = 9
 nIndex = 10
@@ -33,7 +33,7 @@ dropout = 0
 should_tie_weights = 0
 lr = opt.learning_rate
 length = input_size_x * input_size_y
-batch_size = 1
+batch_size = 8
 rho = length -- sequence length
 load = false
 
@@ -115,7 +115,7 @@ local template_final = nn.Sequential()
 template_final:add(nn.GridLSTM(input_size_x, input_size_y, rnn_size, rho, should_tie_weights, zeroTensor))
 template_final:add(nn.JoinTable(1,1))
 --template_final:add(nn.SelectTable(2))
---template_final:add(nn.Linear(rnn_size, input_k))
+
 
 ----- Create Modules
 local grid_1 = template
@@ -158,15 +158,17 @@ SeqCorner_4:add(Seq_4)
 SeqCorner_4:add(nn.ReverseTable())     -- Unreverse
 
 local finalLayer = nn.Sequential()
-finalLayer:add(nn.Linear(2*rnn_size, n_labels))
+--finalLayer:add(nn.JoinTable(1,1))
+template_final:add(nn.Linear(2*rnn_size, n_labels*p_size*p_size))
 finalLayer:add(nn.LogSoftMax())
+finalLayer:add(nn.Reshape(p_size*p_size, n_labels))
+finalLayer:add(nn.SplitTable(2, p_size*p_size))
 
 --- Concat everything together
 --local concat = nn.ConcatTable()
 --concat:add(SeqCorner_1):add(SeqCorner_2):add(SeqCorner_3):add(SeqCorner_4)
 
 --- Init Merger
--- Need to experiment with CMult
 local merger = nn.Sequencer(nn.CAddTable(1,1))  
 
 --- Final Merge of for concurrent layers
@@ -179,7 +181,7 @@ gridLSTM:add(SeqCorner_1)
 gridLSTM:add(SeqCorner_2)
 gridLSTM:add(SeqCorner_3)
 gridLSTM:add(SeqCorner_4)
-gridLSTM:add(finalLayer)
+gridLSTM:add(nn.Sequencer(finalLayer))
 -- internally, rnn will be wrapped into a Recursor to make it an --AbstractRecurrent instance.
 
 
@@ -194,7 +196,11 @@ if load then model = torch.load('gridlstm.model') end
 --print(model)
 
 -- build criterion
-criterion = nn.SequencerCriterion(nn.ClassNLLCriterion())
+crit = nn.ParallelCriterion()
+for i=1,p_size*p_size do
+  crit:add(nn.ClassNLLCriterion())
+end
+criterion = nn.SequencerCriterion(crit)
 
 -- this matrix records the current confusion across classes
 classes = {'1','2','3','4','5','6','7','8','9','10'}
@@ -210,8 +216,8 @@ end
 current_batch = 0
 function next_batch(b_size)
 
-   batch_x = torch.Tensor(b_size, 3, input_size_y*input_size_x)
-   batch_y = torch.Tensor(b_size, 1, input_size_y*input_size_x)
+   batch_x = torch.Tensor(b_size, 3, 51*38)
+   batch_y = torch.Tensor(b_size, 1, 51*38)
    for i = 1, b_size do
 
        local x = trainset.x[(current_batch*(b_size)+i)%trainset.size+1] --image.translate(ex.x, torch.random(0, 4), torch.random(0, 4)) -- the input (a 28x28 ByteTensor)
@@ -235,37 +241,40 @@ function next_batch(b_size)
         patch_y  = {}
         -- Get Patch with p_size
         for x_p = 0, p_size-1 do 
-           for y_p = 0, p_size-1 do 
+           for y_p = 0, p_size-1 do
+
              table.insert(patch_x, batch_x[k+y_p*p_size+x_p])
-             table.insert(patch_y, batch_y[k+y_p*p_size+x_p])
+             table.insert(patch_y, batch_y[k+y_p*p_size+x_p]:squeeze())
            end 
          end 
         --table.insert(inputs, nn.JoinTable(2):forward{batch_x[k], batch_x[k+1], batch_x[k+input_size_x], batch_x[k+input_size_x+1]})
         table.insert(inputs, nn.JoinTable(2):forward{unpack(patch_x)})
-        table.insert(outputs, nn.JoinTable(2):forward{unpack(patch_y)})
+        table.insert(outputs, patch_y)
       
       end
    end
 
    current_batch = current_batch + 1
-   --print(inputs)
     if opt.gpuid >= 0 then
       for i = 1, length do 
           inputs[i] = inputs[i]:cuda()
-          outputs[i] = outputs[i]:cuda()
+          outputs[i] = outputs[i]
       end
     end
+
    return inputs, outputs
 end
 
 
 -- preprocessing helper function
 function prepro(x)
+
    x = x:permute(3,1,2):contiguous() -- swap the axes for faster indexing
    if opt.gpuid >= 0 then -- ship the input arrays to GPU
         -- have to convert to float because integers can't be cuda()'d
         x = x:float():cuda()
    end
+
    return x
 end
 
@@ -282,13 +291,13 @@ function testing(dataset)
    print('<trainer> on testing Set:')
    for t = 1,dataset.size,b_size do
       if(c_batch*b_size> 1000) then break end
-     batch_x = torch.Tensor(b_size, 1, input_size_y*input_size_x)
-      batch_y = torch.Tensor(b_size)
+      batch_x = torch.Tensor(b_size, 3, 38*51)
+      batch_y = torch.Tensor(b_size, 1, 38*51)
       for i = 1, b_size do
           if(c_batch*b_size+i> dataset.size) then break end
 
           local x = dataset.x[c_batch*(b_size)+i]
-          local y = dataset.x[c_batch*(b_size)+i]
+          local y = dataset.y[c_batch*(b_size)+i]
    
           batch_x[i] = x
           batch_y[i] = y+1
@@ -310,11 +319,11 @@ function testing(dataset)
             for x_p = 0, p_size-1 do 
                for y_p = 0, p_size-1 do 
                  table.insert(patch_x, batch_x[k+y_p*p_size+x_p])
-                 table.insert(patch_y, batch_y[k+y_p*p_size+x_p])
+                 table.insert(patch_y, batch_y[k+y_p*p_size+x_p]:squeeze())
                end 
              end 
             table.insert(inputs, nn.JoinTable(2):forward{unpack(patch_x)})
-            table.insert(outputs, nn.JoinTable(2):forward{unpack(patch_y)})
+            table.insert(outputs, patch_y)
           end
       end
 
@@ -330,10 +339,11 @@ function testing(dataset)
 
       -- test samples
       local preds = model:forward(inputs)
-
       -- confusion:
       for i = 1, batch_size do
-         confusion:add(preds[i], outputs[i])
+        --write log10 error detector
+
+        --confusion:add(preds[i], outputs[i])
       end
    end
 
