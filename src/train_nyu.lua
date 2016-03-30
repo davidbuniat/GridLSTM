@@ -19,12 +19,12 @@ torch.manualSeed(opt.seed)
 nngraph.setDebug(false)
 
 -- hyper-parameters 
-p_size = 4
-input_size_x = 13
-input_size_y = 9
-n_labels = 894
+p_size = 1
+input_size_x = 32--36
+input_size_y = 25--27
+n_labels = 1
 input_k = p_size * p_size * 3
-rnn_size = 10
+rnn_size = 20
 hiddenLayer = 40
 output_size = 9
 nIndex = 10
@@ -33,9 +33,12 @@ dropout = 0
 should_tie_weights = 0
 lr = opt.learning_rate
 length = input_size_x * input_size_y
-batch_size = 8
+batch_size = 1
 rho = length -- sequence length
 load = false
+img_x = 36
+img_y = 27
+
 
 
 local nyu = require 'data.nyu'
@@ -159,8 +162,10 @@ SeqCorner_4:add(nn.ReverseTable())     -- Unreverse
 
 local finalLayer = nn.Sequential()
 --finalLayer:add(nn.JoinTable(1,1))
-template_final:add(nn.Linear(2*rnn_size, n_labels*p_size*p_size))
-finalLayer:add(nn.LogSoftMax())
+template_final:add(nn.Linear(2*rnn_size, 2048))
+finalLayer:add(nn.ReLU())
+template_final:add(nn.Linear(2048, n_labels*p_size*p_size))
+finalLayer:add(nn.ReLU())
 finalLayer:add(nn.Reshape(p_size*p_size, n_labels))
 finalLayer:add(nn.SplitTable(2, p_size*p_size))
 
@@ -196,10 +201,12 @@ if load then model = torch.load('gridlstm.model') end
 --print(model)
 
 -- build criterion
+--crit = nn.ParallelCriterion()
+--for i=1,p_size*p_size do
+--  crit:add(nn.ClassNLLCriterion())
+--end
 crit = nn.ParallelCriterion()
-for i=1,p_size*p_size do
-  crit:add(nn.ClassNLLCriterion())
-end
+crit:add(nn.AbsCriterion())
 criterion = nn.SequencerCriterion(crit)
 
 -- this matrix records the current confusion across classes
@@ -216,8 +223,8 @@ end
 current_batch = 0
 function next_batch(b_size)
 
-   batch_x = torch.Tensor(b_size, 3, 51*38)
-   batch_y = torch.Tensor(b_size, 1, 51*38)
+   batch_x = torch.Tensor(b_size, 3, img_x*img_y)
+   batch_y = torch.Tensor(b_size, 1, img_x*img_y)
    for i = 1, b_size do
 
        local x = trainset.x[(current_batch*(b_size)+i)%trainset.size+1] --image.translate(ex.x, torch.random(0, 4), torch.random(0, 4)) -- the input (a 28x28 ByteTensor)
@@ -244,7 +251,7 @@ function next_batch(b_size)
            for y_p = 0, p_size-1 do
 
              table.insert(patch_x, batch_x[k+y_p*p_size+x_p])
-             table.insert(patch_y, batch_y[k+y_p*p_size+x_p]:squeeze())
+             table.insert(patch_y, batch_y[k+y_p*p_size+x_p]) -- :squeeze()
            end 
          end 
         --table.insert(inputs, nn.JoinTable(2):forward{batch_x[k], batch_x[k+1], batch_x[k+input_size_x], batch_x[k+input_size_x+1]})
@@ -291,8 +298,8 @@ function testing(dataset)
    print('<trainer> on testing Set:')
    for t = 1,dataset.size,b_size do
       if(c_batch*b_size> 1000) then break end
-      batch_x = torch.Tensor(b_size, 3, 38*51)
-      batch_y = torch.Tensor(b_size, 1, 38*51)
+      batch_x = torch.Tensor(b_size, 3, img_x*img_y)
+      batch_y = torch.Tensor(b_size, 1, img_x*img_y)
       for i = 1, b_size do
           if(c_batch*b_size+i> dataset.size) then break end
 
@@ -319,7 +326,7 @@ function testing(dataset)
             for x_p = 0, p_size-1 do 
                for y_p = 0, p_size-1 do 
                  table.insert(patch_x, batch_x[k+y_p*p_size+x_p])
-                 table.insert(patch_y, batch_y[k+y_p*p_size+x_p]:squeeze())
+                 table.insert(patch_y, batch_y[k+y_p*p_size+x_p]) --:squeeze()
                end 
              end 
             table.insert(inputs, nn.JoinTable(2):forward{unpack(patch_x)})
@@ -373,6 +380,8 @@ feval = function(x_new)
 
     -- evaluate the loss function and its derivative with respect to x_weights, given a mini batch
     local prediction = model:forward(inputs)
+    --print(prediction)
+    --print(targets)
     local loss_x = criterion:forward(prediction, targets)
     model:backward(inputs, criterion:backward(prediction, targets))
 
