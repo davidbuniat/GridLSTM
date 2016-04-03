@@ -24,7 +24,7 @@ input_size_x = 30--2--36
 input_size_y = 23--5--27
 n_labels = 1
 input_k = p_size * p_size * 3
-rnn_size = 200
+rnn_size = 10
 hiddenLayer = 40
 output_size = 9
 nIndex = 10
@@ -33,12 +33,10 @@ dropout = 0
 should_tie_weights = 0
 lr = opt.learning_rate
 length = input_size_x * input_size_y
-batch_size = 8
+batch_size = 16
 rho = length -- sequence length
 load = false
-img_x = 34
-img_y = 26
-n_f_hidden = 1024 -- number of final hidden layers
+n_f_hidden = 2048 -- number of final hidden layers
 depth_scale_factor = 5.5
 
 
@@ -53,6 +51,8 @@ local testset = nyu.testdataset
 
 img_x = trainset.x:size()[4]
 img_y = trainset.x:size()[3]
+print(img_x)
+print(img_y)
 
 print(trainset.size) -- to retrieve the size
 print(testset.size) -- to retrieve the size
@@ -255,8 +255,8 @@ function testing(dataset)
    -- local vars
    local time = sys.clock()
    b_size = batch_size
-   local testset = torch.Tensor(torch.floor(dataset.size/b_size)*b_size, input_size_x,input_size_y)
-   local outputset = torch.Tensor(torch.floor(dataset.size/b_size)*b_size, input_size_x,input_size_y)
+   local testset = {}
+   local outputset = {}
 
    -- test over given dataset
    local c_batch = 1
@@ -272,14 +272,17 @@ function testing(dataset)
       outputs = nn.JoinTable(2):forward{unpack(outputs)}
       preds = nn.JoinTable(2):forward{unpack(preds)}
 
-      t_preds = preds:reshape(b_size, input_size_x, input_size_y)
-      t_output = outputs:reshape(b_size, input_size_x, input_size_y)
+      t_preds = preds:reshape(b_size, input_size_y, input_size_x)
+      t_output = outputs:reshape(b_size, input_size_y, input_size_x)
+
       for i = 1, batch_size do
-        testset[i+(c_batch-1)*b_size] = t_preds[i]
-        outputset[i+(c_batch-1)*b_size] = t_output[i]
+        table.insert(testset, t_preds[i])
+        table.insert(outputset, t_output[i])
       end
 
       -- Scale by 5.5 to get initial results
+      preds = preds + 0.5
+      outputs = outputs + 0.5
       preds:mul(depth_scale_factor)
       outputs:mul(depth_scale_factor)
 
@@ -294,8 +297,8 @@ function testing(dataset)
 
    rms = rms_sum/(torch.floor(dataset.size/b_size)*b_size)
    print("Root mean squared error: " .. rms )
-   matio.save('data/testset.mat', testset)
-   matio.save('data/outputset.mat', outputset)
+   matio.save('data/testset.mat', t_preds)
+   matio.save('data/outputset.mat', t_output)
    -- timing
    time = sys.clock() - time
    time = time / (c_batch * b_size)
@@ -344,35 +347,33 @@ adam_params = {
 local optim_state = {learningRate = opt.learning_rate, alpha = opt.decay_rate}
 -- training
 local iteration = 1
-local i = 1
+local i = 0
 while true do
 
     _, fs = optim.adam(feval,x_weights,adam_params)
    print(string.format("Iteration %d ; NLL err = %f ", iteration, fs[1]))
       
-   f(i==0 and fs[1]~=nan) then 
+   if(i==0 and iteration<160) then
       testing(testset)
       --print('error for iteration ' .. sgd_params.evalCounter  .. ' is ' .. fs[1] / rho)
    end
-   i = (i+1)%66
+   i = (i+1)%10
 
    iteration = iteration + 1
 end
-
-
 
 
 --------------------------------------------------------------
 --                      testing
 --------------------------------------------------------------
 
---batch_x, batch_y = next_batch(1)
---
+--batch_x, batch_y = next_batch(testset, 1)
+----
 --batch_y = nn.JoinTable(2):forward{unpack(batch_y)}
---batch_y = batch_y:reshape(8, img_y, img_x)
+--batch_y = batch_y:reshape(batch_size, input_size_y, input_size_x)
 --a = testset.y[2]:squeeze()
 --b = batch_y[2]
 --
---local first256Samples_y = {a,b}
---image.display{image=first256Samples_y, nrow=16, legend='Some training examples: Y channel'}
+--matio.save('data/testset.mat', batch_y)
+--matio.save('data/outputset.mat', testset.y)
 
