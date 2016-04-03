@@ -39,7 +39,6 @@ load = false
 img_x = 34
 img_y = 26
 n_f_hidden = 2048 -- number of final hidden layers
-
 depth_scale_factor = 5.5
 
 
@@ -51,6 +50,9 @@ local nyu = require 'data.nyu'
 
 local trainset = nyu.traindataset
 local testset = nyu.testdataset
+
+img_x = trainset.x:size()[4]
+img_y = trainset.x:size()[3]
 
 print(trainset.size) -- to retrieve the size
 print(testset.size) -- to retrieve the size
@@ -195,43 +197,47 @@ function prepro(x)
 end
 
 function patchify(batch_x, batch_y)
-
-  local inputs = {}
-  local outputs = {}
-  local k = 1
-
-  for y = 1, input_size_y do 
-    for x = 1, input_size_x do
-      k = p_size*(y-1)*input_size_x + p_size*(x-1) + 1
-
-      local patch_x  = {}
-      local patch_y  = {}
-
-      -- Get Patch with p_size
-      for x_p = 0, p_size-1 do 
-        for y_p = 0, p_size-1 do
-
-          table.insert(patch_x, batch_x[k+y_p*p_size+x_p])
-          table.insert(patch_y, batch_y[k+y_p*p_size+x_p]) -- :squeeze()
-        end 
-      end 
-
-      local joining = nn.JoinTable(2)   
-      if opt.gpuid >= 0 then
-        joining:cuda()
-      end
-
-      table.insert(inputs, joining:forward{unpack(patch_x)})
-      table.insert(outputs, unpack(patch_y))
-    end
-  end
+  inputs =  nn.SplitTable(1):forward(batch_x)
+  outputs  = nn.SplitTable(1):forward(batch_y)
+  inputs = nn.NarrowTable(1,input_size_x*input_size_y):forward(inputs)
+  outputs = nn.NarrowTable(1,input_size_x*input_size_y):forward(outputs)
+--
+--  local inputs = {}
+--  local outputs = {}
+--  local k = 1
+--
+--  for y = 1, input_size_y do 
+--    for x = 1, input_size_x do
+--      k = p_size*(y-1)*input_size_x + p_size*(x-1) + 1
+--
+--      local patch_x  = {}
+--      local patch_y  = {}
+--
+--      -- Get Patch with p_size
+--      for x_p = 0, p_size-1 do 
+--        for y_p = 0, p_size-1 do
+--
+--          table.insert(patch_x, batch_x[k+y_p*p_size+x_p])
+--          table.insert(patch_y, batch_y[k+y_p*p_size+x_p]) -- :squeeze()
+--        end 
+--      end 
+--
+--      local joining = nn.JoinTable(2)   
+--      if opt.gpuid >= 0 then
+--        joining:cuda()
+--      end
+--
+--      table.insert(inputs, joining:forward{unpack(patch_x)})
+--      table.insert(outputs, unpack(patch_y))
+--    end
+--  end
 
   return inputs, outputs
 end
 
-function next_batch(c_batch)
+function next_batch(dataset, c_batch)
 
-  batch_x, batch_y = get_batch(trainset, current_batch)
+  batch_x, batch_y = get_batch(dataset, current_batch)
   
   batch_x = prepro(batch_x)
   batch_y = prepro(batch_y)
@@ -250,6 +256,7 @@ function testing(dataset)
    local time = sys.clock()
    b_size = batch_size
    local testset = torch.Tensor(torch.floor(dataset.size/b_size)*b_size, input_size_x,input_size_y)
+   local outputset = torch.Tensor(torch.floor(dataset.size/b_size)*b_size, input_size_x,input_size_y)
 
    -- test over given dataset
    local c_batch = 1
@@ -258,7 +265,7 @@ function testing(dataset)
    for t = 1,dataset.size,b_size do
       if(c_batch*b_size> 500) then break end
 
-      inputs, outputs = next_batch(c_batch)
+      inputs, outputs = next_batch(dataset, c_batch)
 
       -- Test samples
       local preds = model:forward(inputs)
@@ -266,9 +273,10 @@ function testing(dataset)
       preds = nn.JoinTable(2):forward{unpack(preds)}
 
       t_preds = preds:reshape(b_size, input_size_x, input_size_y)
+      t_output = outputs:reshape(b_size, input_size_x, input_size_y)
       for i = 1, batch_size do
         testset[i+(c_batch-1)*b_size] = t_preds[i]
-
+        outputset[i+(c_batch-1)*b_size] = t_output[i]
       end
 
       -- Scale by 5.5 to get initial results
@@ -287,6 +295,7 @@ function testing(dataset)
    rms = rms_sum/(torch.floor(dataset.size/b_size)*b_size)
    print("Root mean squared error: " .. rms )
    matio.save('data/testset.mat', testset)
+   matio.save('data/outputset.mat', outputset)
    -- timing
    time = sys.clock() - time
    time = time / (c_batch * b_size)
@@ -299,7 +308,6 @@ end
 --------------------------------------------------------------
 
 x_weights, dl_dx = model:getParameters()
-
 current_batch = 1
 
 feval = function(x_new)
@@ -309,7 +317,7 @@ feval = function(x_new)
     end
 
     -- select a training batch
-    local inputs, targets = next_batch(current_batch)
+    local inputs, targets = next_batch(trainset, current_batch)
     -- reset gradients (gradients are always accumulated, to accommodate
     -- batch methods)
     dl_dx:zero()
@@ -319,6 +327,7 @@ feval = function(x_new)
     --print(prediction[1])
     --print(targets[1])
     local loss_x = criterion:forward(prediction, targets)
+
     model:backward(inputs, criterion:backward(prediction, targets))
 
     current_batch = current_batch + 1 -- iterate
@@ -339,7 +348,6 @@ local i = 1
 while true do
 
     _, fs = optim.adam(feval,x_weights,adam_params)
-
    print(string.format("Iteration %d ; NLL err = %f ", iteration, fs[1]))
       
    if(i==0) then 
@@ -347,6 +355,24 @@ while true do
       --print('error for iteration ' .. sgd_params.evalCounter  .. ' is ' .. fs[1] / rho)
    end
    i = (i+1)%66
-   
+
    iteration = iteration + 1
 end
+
+
+
+
+--------------------------------------------------------------
+--                      testing
+--------------------------------------------------------------
+
+--batch_x, batch_y = next_batch(1)
+--
+--batch_y = nn.JoinTable(2):forward{unpack(batch_y)}
+--batch_y = batch_y:reshape(8, img_y, img_x)
+--a = testset.y[2]:squeeze()
+--b = batch_y[2]
+--
+--local first256Samples_y = {a,b}
+--image.display{image=first256Samples_y, nrow=16, legend='Some training examples: Y channel'}
+
