@@ -2,13 +2,13 @@ require 'torch'   -- torch
 require 'image'   -- to visualize the dataset
 require 'nnx'      -- provides a normalization operator
 require 'nn'
-local matio = require 'matio'
+ matio = require 'matio'
 local data = {}
 data.__index = data
 
 print(sys.COLORS.red ..  '==> loading dataset')
 images = matio.load('data/nyu_dataset.mat', 'rgbs');
-labels = matio.load('data/nyu_dataset.mat', 'labels');
+labels = matio.load('data/nyu_dataset.mat', 'depths');
 
 print '==> preprocessing data'
 
@@ -17,15 +17,18 @@ local width = (#images)[3]
 	
 images = images:permute(1,4,2,3)
 images = images/256
+
+
 -- shuffle dataset: get shuffled indices in this variable:
-local labelsShuffle = torch.randperm((#labels)[1])
+--local labelsShuffle = torch.randperm((#labels)[1])
+local n_labels = (#labels)[1]
 
-local portionTrain = 0.7 -- 55% is train data
-local portionTest = 0.25 -- 33% is valid data, rest is test data
+local portionTrain = 0.55 -- 55% is train data
+local portionTest = 0.4 -- 33% is valid data, rest is test data
 
-local trsize = torch.floor(labelsShuffle:size(1)*portionTrain)
-local tesize = torch.floor(labelsShuffle:size(1)*portionTest)
-local valsize = labelsShuffle:size(1) - trsize - tesize
+local trsize = torch.floor(n_labels*portionTrain)
+local tesize = torch.floor(n_labels*portionTest)
+local valsize = (n_labels) - trsize - tesize
 
 -- create train set:
 trainData = {
@@ -52,18 +55,18 @@ valData = {
 }
 
 for i=1,trsize do
-   trainData.x[i] = images[labelsShuffle[i]]:clone()
-   trainData.y[i] = labels[labelsShuffle[i]]:clone()
+   trainData.x[i] = images[i]:clone()
+   trainData.y[i] = labels[i]:clone()
 end
 
 for i=trsize+1,(trsize+tesize) do
-   	testData.x[i-trsize] = images[labelsShuffle[i]]:clone()
-   	testData.y[i-trsize] = labels[labelsShuffle[i]]:clone()
+   	testData.x[i-trsize] = images[i]:clone()
+   	testData.y[i-trsize] = labels[i]:clone()
 end
 
 for i=trsize+tesize+1,valsize+tesize+trsize do
-   	valData.x[i-trsize-tesize] = images[labelsShuffle[i]]:clone()
-   	valData.y[i-trsize-tesize] = labels[labelsShuffle[i]]:clone()
+   	valData.x[i-trsize-tesize] = images[i]:clone()
+   	valData.y[i-trsize-tesize] = labels[i]:clone()
 end
 
 -- remove from memory temp image files:

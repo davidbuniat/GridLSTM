@@ -20,8 +20,8 @@ nngraph.setDebug(false)
 
 -- hyper-parameters 
 p_size = 1
-input_size_x = 32--36
-input_size_y = 25--27
+input_size_x = 2--2--36
+input_size_y = 2--5--27
 n_labels = 1
 input_k = p_size * p_size * 3
 rnn_size = 20
@@ -33,22 +33,31 @@ dropout = 0
 should_tie_weights = 0
 lr = opt.learning_rate
 length = input_size_x * input_size_y
-batch_size = 1
+batch_size = 8
 rho = length -- sequence length
 load = false
-img_x = 36
-img_y = 27
+img_x = 34
+img_y = 26
+n_f_hidden = 2048 -- number of final hidden layers
+
+depth_scale_factor = 5.5
 
 
+--------------------------------------------------------------
+--                          Data
+--------------------------------------------------------------
 
 local nyu = require 'data.nyu'
 
 local trainset = nyu.traindataset
 local testset = nyu.testdataset
 
-
 print(trainset.size) -- to retrieve the size
 print(testset.size) -- to retrieve the size
+
+--------------------------------------------------------------
+--                          GPU
+--------------------------------------------------------------
 
 -- initialize cunn/cutorch for training on the GPU and fall back to CPU gracefully
 if opt.gpuid >= 0 then
@@ -74,7 +83,7 @@ if opt.gpuid >= 0 then
 end
 
 --------------------------------------------------------------
---      GridLSTM
+--                         GridLSTM
 --------------------------------------------------------------
 
 -- Preprocessing of building blocks
@@ -82,198 +91,98 @@ local input = nn.ConcatTable()
 input:add(nn.Linear(input_k, rnn_size))
 input:add(nn.Linear(input_k, rnn_size))
 
-local connect = nn.ParallelTable()
-connect:add(nn.Linear(rnn_size, input_k))
-connect:add(nn.Linear(rnn_size, input_k))
-
-local connect_hidden = nn.ConcatTable()
-connect_hidden:add(nn.Linear(rnn_size, rnn_size))
-connect_hidden:add(nn.Linear(rnn_size, rnn_size))
-
-local hidden_relu = nn.ParallelTable()
-hidden_relu:add(nn.ReLU())
-hidden_relu:add(nn.ReLU())
-
-local hidden_relu_2 = nn.ParallelTable()
-hidden_relu_2:add(nn.ReLU())
-hidden_relu_2:add(nn.ReLU())
-
-local template = nn.Sequential()
-template:add(input)
-template:add(nn.GridLSTM(input_size_x, input_size_y, rnn_size, rho, should_tie_weights, zeroTensor))
---template:add(nn.SelectTable(2))
---template:add(nn.Linear(rnn_size, input_k))
---template:add(nn.ReLU())
-
-
---template:add(connect)
-
-local template_hidden = nn.Sequential()
-template_hidden:add(nn.GridLSTM(input_size_x, input_size_y, rnn_size, rho, should_tie_weights, zeroTensor))
---template_hidden:add(nn.SelectTable(2))
---template_hidden:add(nn.Linear(rnn_size, input_k))
---template_hidden:add(nn.ReLU())
---
-local template_final = nn.Sequential()
-template_final:add(nn.GridLSTM(input_size_x, input_size_y, rnn_size, rho, should_tie_weights, zeroTensor))
-template_final:add(nn.JoinTable(1,1))
---template_final:add(nn.SelectTable(2))
-
-
 ----- Create Modules
-local grid_1 = template
-local grid_2 = template_hidden -- template_hidden -- Top-Right Corner
-local grid_3 = grid_2:clone()-- Bottom-Left Corner
-local grid_4 = template_final -- Bottom-Right Corner
+local grid_1 = nn.Sequential()
+grid_1:add(input)
+grid_1:add(nn.GridLSTM(input_size_x, input_size_y, rnn_size, rho, should_tie_weights, zeroTensor))
 
---- Reset clones
---grid_2:reset()
-grid_3:reset()
---grid_4:reset()
+local grid_2 = nn.GridLSTM(input_size_x, input_size_y, rnn_size, rho, should_tie_weights, zeroTensor) -- template_hidden -- Top-Right Corner
+local grid_3 = nn.GridLSTM(input_size_x, input_size_y, rnn_size, rho, should_tie_weights, zeroTensor)-- Bottom-Left Corner
+
+local grid_4 = nn.Sequential() -- Bottom-Right Corner
+grid_4:add(nn.GridLSTM(input_size_x, input_size_y, rnn_size, rho, should_tie_weights, zeroTensor))
+grid_4:add(nn.JoinTable(1,1))
 
 --- Build GridLSTM 4 layers that process the data from different corners
-local Seq_1 = nn.Sequencer(grid_1)   -- Top-Left Corner
-local Seq_2 = nn.Sequencer(grid_2)   -- Top-Right Corner
-local Seq_3 = nn.Sequencer(grid_3)   -- Bottom-Left Corner
-local Seq_4 = nn.Sequencer(grid_4)   -- Bottom-Right Corner
+local grid_1 = nn.Sequencer(grid_1)   -- Top-Left Corner
+local grid_2 = nn.Sequencer(grid_2)   -- Top-Right Corner
+local grid_3 = nn.Sequencer(grid_3)   -- Bottom-Left Corner
+local grid_4 = nn.Sequencer(grid_4)   -- Bottom-Right Corner
 
 --- grid_1 Top-Left Corner Stays the same
-local SeqCorner_1  = Seq_1
+local SeqCorner_1  = grid_1
 
 --- grid_2 Top-Right Corner
 local SeqCorner_2 = nn.Sequential()
 SeqCorner_2:add(nn.SymmetricTable(input_size_x, input_size_y))   -- Symmetrify
-SeqCorner_2:add(Seq_2)
+SeqCorner_2:add(grid_2)
 SeqCorner_2:add(nn.SymmetricTable(input_size_x, input_size_y))   -- --UnSymmetrify
 
 --- grid_3 Bottom-Left Corner
 local SeqCorner_3 = nn.Sequential()
 SeqCorner_3:add(nn.SymmetricTable(input_size_x, input_size_y))   -- Symmetrify
 SeqCorner_3:add(nn.ReverseTable())     -- Reverse
-SeqCorner_3:add(Seq_3)
+SeqCorner_3:add(grid_3)
 SeqCorner_3:add(nn.ReverseTable())     -- Unreverse
 SeqCorner_3:add(nn.SymmetricTable(input_size_x, input_size_y))   -- --UnSymmetrify
 
 --- grid_4 Bottom-Right Corner
 local SeqCorner_4 = nn.Sequential()
 SeqCorner_4:add(nn.ReverseTable())     -- Reverse
-SeqCorner_4:add(Seq_4)
+SeqCorner_4:add(grid_4)
 SeqCorner_4:add(nn.ReverseTable())     -- Unreverse
 
 local finalLayer = nn.Sequential()
---finalLayer:add(nn.JoinTable(1,1))
-template_final:add(nn.Linear(2*rnn_size, 2048))
+finalLayer:add(nn.Linear(2*rnn_size, n_f_hidden))
 finalLayer:add(nn.ReLU())
-template_final:add(nn.Linear(2048, n_labels*p_size*p_size))
-finalLayer:add(nn.ReLU())
-finalLayer:add(nn.Reshape(p_size*p_size, n_labels))
-finalLayer:add(nn.SplitTable(2, p_size*p_size))
-
---- Concat everything together
---local concat = nn.ConcatTable()
---concat:add(SeqCorner_1):add(SeqCorner_2):add(SeqCorner_3):add(SeqCorner_4)
+finalLayer:add(nn.Linear(n_f_hidden, n_labels*p_size*p_size))
 
 --- Init Merger
 local merger = nn.Sequencer(nn.CAddTable(1,1))  
 
 --- Final Merge of for concurrent layers
 local gridLSTM = nn.Sequential()
---gridLSTM:add(concat)
---gridLSTM:add(nn.ZipTable())
---gridLSTM:add(merger)
 
 gridLSTM:add(SeqCorner_1)
 gridLSTM:add(SeqCorner_2)
 gridLSTM:add(SeqCorner_3)
 gridLSTM:add(SeqCorner_4)
 gridLSTM:add(nn.Sequencer(finalLayer))
--- internally, rnn will be wrapped into a Recursor to make it an --AbstractRecurrent instance.
-
 
 local model = gridLSTM
 if load then model = torch.load('gridlstm.model') end 
---model:add(nn.JoinTable(1,1))
---model:add(nn.Linear(2*rnn_size*length, hiddenLayer))
---model:add(nn.ReLU())
---model:add(nn.Linear(hiddenLayer, 10))
---model:add(nn.LogSoftMax())
 
---print(model)
-
--- build criterion
---crit = nn.ParallelCriterion()
---for i=1,p_size*p_size do
---  crit:add(nn.ClassNLLCriterion())
---end
-crit = nn.ParallelCriterion()
-crit:add(nn.AbsCriterion())
+crit = nn.MSECriterion()
 criterion = nn.SequencerCriterion(crit)
-
--- this matrix records the current confusion across classes
-classes = {'1','2','3','4','5','6','7','8','9','10'}
-confusion = optim.ConfusionMatrix(classes)
---testLogger = optim.Logger(paths.concat(opt.save, 'test.log'))
 
 if opt.gpuid >= 0 then
   model:cuda()
   criterion:cuda()
 end
 
+--------------------------------------------------------------
+--                     Batch Manipulation
+--------------------------------------------------------------
 -- Load Batch
-current_batch = 0
-function next_batch(b_size)
+function get_batch(dataset, n_batch)
+  -- Create tensors
+  batch_x = torch.Tensor(batch_size, 3, img_x*img_y)
+  batch_y = torch.Tensor(batch_size, 1, img_x*img_y)
 
-   batch_x = torch.Tensor(b_size, 3, img_x*img_y)
-   batch_y = torch.Tensor(b_size, 1, img_x*img_y)
-   for i = 1, b_size do
+  -- Load data
+  for i = 1, batch_size do
+      if((n_batch-1)*(batch_size)+i> dataset.size) then break end
 
-       local x = trainset.x[(current_batch*(b_size)+i)%trainset.size+1] --image.translate(ex.x, torch.random(0, 4), torch.random(0, 4)) -- the input (a 28x28 ByteTensor)
-       local y = trainset.y[(current_batch*(b_size)+i)%trainset.size+1]
-       batch_x[i] = x
-       batch_y[i] = y+1
-   end
-   
-   batch_x = prepro(batch_x)
-   batch_y = prepro(batch_y)
-
-   local inputs = {}
-   local outputs = {}
-   local k = 1
-
-   for y = 1, input_size_y do 
-      for x = 1, input_size_x do
-        k = p_size*(y-1)*input_size_x + p_size*(x-1) + 1
-
-        patch_x  = {}
-        patch_y  = {}
-        -- Get Patch with p_size
-        for x_p = 0, p_size-1 do 
-           for y_p = 0, p_size-1 do
-
-             table.insert(patch_x, batch_x[k+y_p*p_size+x_p])
-             table.insert(patch_y, batch_y[k+y_p*p_size+x_p]) -- :squeeze()
-           end 
-         end 
-        --table.insert(inputs, nn.JoinTable(2):forward{batch_x[k], batch_x[k+1], batch_x[k+input_size_x], batch_x[k+input_size_x+1]})
-        table.insert(inputs, nn.JoinTable(2):forward{unpack(patch_x)})
-        table.insert(outputs, patch_y)
-      
-      end
-   end
-
-   current_batch = current_batch + 1
-    if opt.gpuid >= 0 then
-      for i = 1, length do 
-          inputs[i] = inputs[i]:cuda()
-          outputs[i] = outputs[i]
-      end
-    end
-
-   return inputs, outputs
+      local x = dataset.x[(n_batch-1)*(batch_size)+i]
+      local y = dataset.y[(n_batch-1)*(batch_size)+i]
+  
+      batch_x[i] = x
+      batch_y[i] = y
+  end
+  return batch_x, batch_y
 end
 
-
--- preprocessing helper function
+-- Preprocessing helper function
 function prepro(x)
 
    x = x:permute(3,1,2):contiguous() -- swap the axes for faster indexing
@@ -285,106 +194,134 @@ function prepro(x)
    return x
 end
 
+function patchify(batch_x, batch_y)
 
+  local inputs = {}
+  local outputs = {}
+  local k = 1
 
--- test function
+  for y = 1, input_size_y do 
+    for x = 1, input_size_x do
+      k = p_size*(y-1)*input_size_x + p_size*(x-1) + 1
+
+      local patch_x  = {}
+      local patch_y  = {}
+
+      -- Get Patch with p_size
+      for x_p = 0, p_size-1 do 
+        for y_p = 0, p_size-1 do
+
+          table.insert(patch_x, batch_x[k+y_p*p_size+x_p])
+          table.insert(patch_y, batch_y[k+y_p*p_size+x_p]) -- :squeeze()
+        end 
+      end 
+
+      local joining = nn.JoinTable(2)   
+      if opt.gpuid >= 0 then
+        joining:cuda()
+      end
+
+      table.insert(inputs, joining:forward{unpack(patch_x)})
+      table.insert(outputs, unpack(patch_y))
+    end
+  end
+
+  return inputs, outputs
+end
+
+function next_batch(c_batch)
+
+  batch_x, batch_y = get_batch(trainset, current_batch)
+  
+  batch_x = prepro(batch_x)
+  batch_y = prepro(batch_y)
+
+  inputs, outputs = patchify(batch_x, batch_y)
+
+  return inputs, outputs
+end
+
+--------------------------------------------------------------
+--                        Test Function
+--------------------------------------------------------------
+
 function testing(dataset)
    -- local vars
    local time = sys.clock()
+   b_size = batch_size
+   local testset = torch.Tensor(torch.floor(dataset.size/b_size)*b_size, input_size_x,input_size_y)
 
    -- test over given dataset
    local c_batch = 1
-   b_size = batch_size
+   rms_sum = 0
    print('<trainer> on testing Set:')
    for t = 1,dataset.size,b_size do
-      if(c_batch*b_size> 1000) then break end
-      batch_x = torch.Tensor(b_size, 3, img_x*img_y)
-      batch_y = torch.Tensor(b_size, 1, img_x*img_y)
-      for i = 1, b_size do
-          if(c_batch*b_size+i> dataset.size) then break end
+      if(c_batch*b_size> 500) then break end
 
-          local x = dataset.x[c_batch*(b_size)+i]
-          local y = dataset.y[c_batch*(b_size)+i]
-   
-          batch_x[i] = x
-          batch_y[i] = y+1
-      end
-      c_batch = c_batch +1
-      batch_x = prepro(batch_x)
-      batch_y = prepro(batch_y)
-   
-      local inputs = {}
-      local outputs = {}
-      local k = 1
-      for y = 1, input_size_y do 
-         for x = 1, input_size_x do
-            k = p_size*(y-1)*input_size_x + p_size*(x-1) + 1
+      inputs, outputs = next_batch(c_batch)
 
-            patch_x  = {}
-            patch_y  = {}
-            -- Get Patch with p_size
-            for x_p = 0, p_size-1 do 
-               for y_p = 0, p_size-1 do 
-                 table.insert(patch_x, batch_x[k+y_p*p_size+x_p])
-                 table.insert(patch_y, batch_y[k+y_p*p_size+x_p]) --:squeeze()
-               end 
-             end 
-            table.insert(inputs, nn.JoinTable(2):forward{unpack(patch_x)})
-            table.insert(outputs, patch_y)
-          end
-      end
-
-      if opt.gpuid >= 0 then
-        for i = 1, length do 
-          inputs[i] = inputs[i]:cuda()
-        end
-      end
-
-      --for i = 1, length do 
-      --   table.insert(inputs, batch_x[i])
-      --end
-
-      -- test samples
+      -- Test samples
       local preds = model:forward(inputs)
-      -- confusion:
-      for i = 1, batch_size do
-        --write log10 error detector
+      outputs = nn.JoinTable(2):forward{unpack(outputs)}
+      preds = nn.JoinTable(2):forward{unpack(preds)}
 
-        --confusion:add(preds[i], outputs[i])
+      t_preds = preds:reshape(b_size, input_size_x, input_size_y)
+      for i = 1, batch_size do
+        testset[i+(c_batch-1)*b_size] = t_preds[i]
+
       end
+
+      -- Scale by 5.5 to get initial results
+      preds:mul(depth_scale_factor)
+      outputs:mul(depth_scale_factor)
+
+      -- Calculate Root Mean Square Error
+      for i = 1, batch_size do
+        local rms = torch.sqrt(torch.sum(torch.pow(torch.csub(preds[i],outputs[i]),2))/((input_size_x*input_size_y)))
+        rms_sum= rms_sum + rms
+      end
+
+      c_batch = c_batch + 1
    end
 
+   rms = rms_sum/(torch.floor(dataset.size/b_size)*b_size)
+   print("Root mean squared error: " .. rms )
+   matio.save('data/testset.mat', testset)
    -- timing
    time = sys.clock() - time
    time = time / (c_batch * b_size)
    print("<trainer> time to test 1 sample = " .. (time*1000) .. 'ms')
 
-   -- print confusion matrix
-   print(confusion)
-   print('% mean class accuracy (test set)'..confusion.totalValid * 100)
-   confusion:zero()
 end
 
+--------------------------------------------------------------
+--                      Training
+--------------------------------------------------------------
+
 x_weights, dl_dx = model:getParameters()
+
+current_batch = 1
 
 feval = function(x_new)
     -- copy the weight if are changed
     if x_weights ~= x_new then
         x_weights:copy(x_new)
     end
+
     -- select a training batch
-    local inputs, targets = next_batch(batch_size)
+    local inputs, targets = next_batch(current_batch)
     -- reset gradients (gradients are always accumulated, to accommodate
     -- batch methods)
     dl_dx:zero()
 
     -- evaluate the loss function and its derivative with respect to x_weights, given a mini batch
     local prediction = model:forward(inputs)
-    --print(prediction)
-    --print(targets)
+    --print(prediction[1])
+    --print(targets[1])
     local loss_x = criterion:forward(prediction, targets)
     model:backward(inputs, criterion:backward(prediction, targets))
 
+    current_batch = current_batch + 1 -- iterate
     return loss_x, dl_dx
 end
 
@@ -405,9 +342,7 @@ while true do
 
    print(string.format("Iteration %d ; NLL err = %f ", iteration, fs[1]))
       
-   -- 4. update
    if(i==0) then 
-      torch.save('gridlstm.model', model)
       testing(testset)
       --print('error for iteration ' .. sgd_params.evalCounter  .. ' is ' .. fs[1] / rho)
    end
