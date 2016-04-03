@@ -24,7 +24,7 @@ input_size_x = 30--2--36
 input_size_y = 23--5--27
 n_labels = 1
 input_k = p_size * p_size * 3
-rnn_size = 10
+rnn_size = 100
 hiddenLayer = 40
 output_size = 9
 nIndex = 10
@@ -36,7 +36,7 @@ length = input_size_x * input_size_y
 batch_size = 16
 rho = length -- sequence length
 load = false
-n_f_hidden = 2048 -- number of final hidden layers
+n_f_hidden = 1024 -- number of final hidden layers
 depth_scale_factor = 5.5
 
 
@@ -353,7 +353,7 @@ while true do
     _, fs = optim.adam(feval,x_weights,adam_params)
    print(string.format("Iteration %d ; NLL err = %f ", iteration, fs[1]))
       
-   if(i==0 and iteration<160) then
+   if(i==0 and iteration<44) then
       testing(testset)
       --print('error for iteration ' .. sgd_params.evalCounter  .. ' is ' .. fs[1] / rho)
    end
