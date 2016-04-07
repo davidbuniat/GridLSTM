@@ -36,7 +36,7 @@ length = input_size_x * input_size_y
 batch_size = 16
 rho = length -- sequence length
 load = false
-n_f_hidden = 1024 -- number of final hidden layers
+n_f_hidden = 100 -- number of final hidden layers
 depth_scale_factor = 5.5
 
 
