@@ -24,20 +24,19 @@ input_size_x = 30--2--36
 input_size_y = 23--5--27
 n_labels = 1
 input_k = p_size * p_size * 3
-rnn_size = 100
+rnn_size = 128
 hiddenLayer = 40
 output_size = 9
 nIndex = 10
 n_layers = 1
-dropout = 0
+dropout = 0.2
 should_tie_weights = 0
 lr = opt.learning_rate
 length = input_size_x * input_size_y
-batch_size = 16
+batch_size = 8
 rho = length -- sequence length
 load = false
-n_f_hidden = 100 -- number of final hidden layers
-depth_scale_factor = 5.5
+n_f_hidden = 2048 -- number of final hidden layers
 
 
 --------------------------------------------------------------
@@ -137,6 +136,7 @@ SeqCorner_4:add(nn.ReverseTable())     -- Unreverse
 local finalLayer = nn.Sequential()
 finalLayer:add(nn.Linear(2*rnn_size, n_f_hidden))
 finalLayer:add(nn.ReLU())
+--finalLayer:add(nn.Dropout(dropout))
 finalLayer:add(nn.Linear(n_f_hidden, n_labels*p_size*p_size))
 
 --- Init Merger
@@ -166,21 +166,22 @@ end
 --                     Batch Manipulation
 --------------------------------------------------------------
 -- Load Batch
-function get_batch(dataset, n_batch)
+function get_batch(dataset, batch_number)
   -- Create tensors
   batch_x = torch.Tensor(batch_size, 3, img_x*img_y)
   batch_y = torch.Tensor(batch_size, 1, img_x*img_y)
 
   -- Load data
   for i = 1, batch_size do
-      if((n_batch-1)*(batch_size)+i> dataset.size) then break end
+      if((batch_number-1)*(batch_size)+i> dataset.size) then break end
 
-      local x = dataset.x[(n_batch-1)*(batch_size)+i]
-      local y = dataset.y[(n_batch-1)*(batch_size)+i]
-  
+      local x = dataset.x[(batch_number-1)*(batch_size)+i]
+      local y = dataset.y[(batch_number-1)*(batch_size)+i]
+
       batch_x[i] = x
       batch_y[i] = y
   end
+
   return batch_x, batch_y
 end
 
@@ -188,61 +189,35 @@ end
 function prepro(x)
 
    x = x:permute(3,1,2):contiguous() -- swap the axes for faster indexing
-   if opt.gpuid >= 0 then -- ship the input arrays to GPU
-        -- have to convert to float because integers can't be cuda()'d
-        x = x:float():cuda()
-   end
-
    return x
 end
 
 function patchify(batch_x, batch_y)
+  --print(batch_x:size())
   inputs =  nn.SplitTable(1):forward(batch_x)
   outputs  = nn.SplitTable(1):forward(batch_y)
   inputs = nn.NarrowTable(1,input_size_x*input_size_y):forward(inputs)
   outputs = nn.NarrowTable(1,input_size_x*input_size_y):forward(outputs)
---
---  local inputs = {}
---  local outputs = {}
---  local k = 1
---
---  for y = 1, input_size_y do 
---    for x = 1, input_size_x do
---      k = p_size*(y-1)*input_size_x + p_size*(x-1) + 1
---
---      local patch_x  = {}
---      local patch_y  = {}
---
---      -- Get Patch with p_size
---      for x_p = 0, p_size-1 do 
---        for y_p = 0, p_size-1 do
---
---          table.insert(patch_x, batch_x[k+y_p*p_size+x_p])
---          table.insert(patch_y, batch_y[k+y_p*p_size+x_p]) -- :squeeze()
---        end 
---      end 
---
---      local joining = nn.JoinTable(2)   
---      if opt.gpuid >= 0 then
---        joining:cuda()
---      end
---
---      table.insert(inputs, joining:forward{unpack(patch_x)})
---      table.insert(outputs, unpack(patch_y))
---    end
---  end
-
+  --print(batch_x:size())
+  --os.exit()
   return inputs, outputs
 end
 
-function next_batch(dataset, c_batch)
+function next_batch(dataset, batch_number)
 
-  batch_x, batch_y = get_batch(dataset, current_batch)
+  batch_x, batch_y = get_batch(dataset, batch_number)
   
   batch_x = prepro(batch_x)
   batch_y = prepro(batch_y)
 
   inputs, outputs = patchify(batch_x, batch_y)
+  if opt.gpuid >= 0 then -- ship the input arrays to GPU
+        -- have to convert to float because integers can't be cuda()'d
+    for i = 1, input_size_x*input_size_y do
+      inputs[i] = inputs[i]:float():cuda()
+      outputs[i] = outputs[i]:float():cuda()
+    end
+  end
 
   return inputs, outputs
 end
@@ -263,15 +238,27 @@ function testing(dataset)
    rms_sum = 0
    print('<trainer> on testing Set:')
    for t = 1,dataset.size,b_size do
-      if(c_batch*b_size> 500) then break end
+      --if(c_batch*b_size> 16) then break end
 
       inputs, outputs = next_batch(dataset, c_batch)
 
       -- Test samples
       local preds = model:forward(inputs)
+      --print(inputs[1])
+      --print(outputs[1])
+      --print(preds[1])
+      --print('')
       outputs = nn.JoinTable(2):forward{unpack(outputs)}
       preds = nn.JoinTable(2):forward{unpack(preds)}
 
+      -- Scale by 5.5 to get initial results
+      preds:mul(l_std)
+      outputs:mul(l_std)
+
+      preds = preds + l_mean
+      outputs = outputs + l_mean
+
+      --print(preds[1])
       t_preds = preds:reshape(b_size, input_size_y, input_size_x)
       t_output = outputs:reshape(b_size, input_size_y, input_size_x)
 
@@ -279,12 +266,6 @@ function testing(dataset)
         table.insert(testset, t_preds[i])
         table.insert(outputset, t_output[i])
       end
-
-      -- Scale by 5.5 to get initial results
-      preds = preds + 0.5
-      outputs = outputs + 0.5
-      preds:mul(depth_scale_factor)
-      outputs:mul(depth_scale_factor)
 
       -- Calculate Root Mean Square Error
       for i = 1, batch_size do
@@ -320,15 +301,18 @@ feval = function(x_new)
     end
 
     -- select a training batch
-    local inputs, targets = next_batch(trainset, current_batch)
+    local inputs, targets = next_batch(testset, current_batch)
+
     -- reset gradients (gradients are always accumulated, to accommodate
     -- batch methods)
     dl_dx:zero()
-
+    --print(inputs[1])
+    --print(targets[1])
     -- evaluate the loss function and its derivative with respect to x_weights, given a mini batch
     local prediction = model:forward(inputs)
+
     --print(prediction[1])
-    --print(targets[1])
+    --print('')
     local loss_x = criterion:forward(prediction, targets)
 
     model:backward(inputs, criterion:backward(prediction, targets))
@@ -347,33 +331,21 @@ adam_params = {
 local optim_state = {learningRate = opt.learning_rate, alpha = opt.decay_rate}
 -- training
 local iteration = 1
-local i = 0
+local i = 1
 while true do
 
-    _, fs = optim.adam(feval,x_weights,adam_params)
-   print(string.format("Iteration %d ; NLL err = %f ", iteration, fs[1]))
-      
-   if(i==0 and iteration<44) then
+  _, fs = optim.adam(feval,x_weights,adam_params)
+  print(string.format("Iteration %d ; NLL err = %f ", iteration, fs[1]))
+
+  if(i==0 and iteration<44) then
       testing(testset)
       --print('error for iteration ' .. sgd_params.evalCounter  .. ' is ' .. fs[1] / rho)
-   end
+  end
+
    i = (i+1)%10
 
    iteration = iteration + 1
 end
 
 
---------------------------------------------------------------
---                      testing
---------------------------------------------------------------
-
---batch_x, batch_y = next_batch(testset, 1)
-----
---batch_y = nn.JoinTable(2):forward{unpack(batch_y)}
---batch_y = batch_y:reshape(batch_size, input_size_y, input_size_x)
---a = testset.y[2]:squeeze()
---b = batch_y[2]
---
---matio.save('data/testset.mat', batch_y)
---matio.save('data/outputset.mat', testset.y)
 
