@@ -302,7 +302,8 @@ feval = function(x_new)
 
     -- select a training batch
     local inputs, targets = next_batch(testset, current_batch)
-
+    print(inputs[1])
+    print(targets[1])
     -- reset gradients (gradients are always accumulated, to accommodate
     -- batch methods)
     dl_dx:zero()

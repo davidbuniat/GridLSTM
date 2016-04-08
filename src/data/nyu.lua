@@ -106,23 +106,23 @@ testData.y = testData.y:float()
 ----     as a result, each color component has 0-mean and 1-norm across the dataset.
 --
 ---- Convert all images to YUV
--- print '==> preprocessing data: colorspace RGB -> YUV'
---
--- for i = 1,trainData.size do 
---    trainData.x[i] = image.rgb2yuv(trainData.x[i])
---    --trainData.labels[i] = image.rgb2yuv(trainData.labels[i])
--- end
---
--- for i = 1,valData.size do
---    valData.x[i] = image.rgb2yuv(valData.x[i])
---    --valData.labels[i] = image.rgb2yuv(valData.labels[i])
--- end
---
--- for i = 1,testData.size do
---    testData.x[i] = image.rgb2yuv(testData.x[i])
---    --testData.labels[i] = image.rgb2yuv(testData.labels[i])
--- end
---
+ print '==> preprocessing data: colorspace RGB -> YUV'
+
+ for i = 1,trainData.size do 
+    trainData.x[i] = image.rgb2yuv(trainData.x[i])
+    --trainData.labels[i] = image.rgb2yuv(trainData.labels[i])
+ end
+
+ for i = 1,valData.size do
+    valData.x[i] = image.rgb2yuv(valData.x[i])
+    --valData.labels[i] = image.rgb2yuv(valData.labels[i])
+ end
+
+ for i = 1,testData.size do
+    testData.x[i] = image.rgb2yuv(testData.x[i])
+    --testData.labels[i] = image.rgb2yuv(testData.labels[i])
+ end
+
 --   
 ---- Name channels for convenience
 local channels = {'y', 'u', 'v'}
@@ -180,38 +180,41 @@ testData.y:div(l_std)
 --
 ----
 ---- Local contrast normalization is needed in the face dataset as the dataset is already in this form:
---print(sys.COLORS.red ..  '==> preprocessing data: normalize all three channels locally')
---
----- Define the normalization neighborhood:
---local neighborhood = image.gaussian1D(5) -- 5 for face detector training
---
----- Define our local normalization operator (It is an actual nn module, 
----- which could be inserted into a trainable model):
---local normalization = nn.SpatialContrastiveNormalization(1, neighborhood, 1):float()
+print(sys.COLORS.red ..  '==> preprocessing data: normalize all three channels locally')
+
+-- Define the normalization neighborhood:
+local neighborhood = image.gaussian1D(3) -- 5 for face detector training
+
+-- Define our local normalization operator (It is an actual nn module, 
+-- which could be inserted into a trainable model):
+local normalization = nn.SpatialContrastiveNormalization(1, neighborhood, 1):float()
 ----
----- Normalize all channels locally:
---for c in ipairs(channels) do
---   for i = 1,trainData.size do
---      trainData.x[{ i,{c},{},{} }] = normalization:forward(trainData.x[{ i,{c},{},{} }])
---   end
---   for i = 1,valData.size do
---      valData.x[{ i,{c},{},{} }] = normalization:forward(valData.x[{ i,{c},{},{} }])
---   end
---   for i = 1,testData.size do
---      testData.x[{ i,{c},{},{} }] = normalization:forward(testData.x[{ i,{c},{},{} }])
---   end
---end
---
------- Normalize all channels locally:
---for i = 1,trainData.size do
---   trainData.y[{ i,{1},{},{} }] = normalization:forward(trainData.y[{ i,{1},{},{} }])
---end
---for i = 1,valData.size do
---   valData.y[{ i,{1},{},{} }] = normalization:forward(valData.y[{ i,{1},{},{} }])
---end
---for i = 1,testData.size do
---   testData.y[{ i,{1},{},{} }] = normalization:forward(testData.x[{ i,{1},{},{} }])
---end
+
+-- Normalize all channels locally:
+for c in ipairs(channels) do
+   for i = 1,trainData.size do
+      trainData.x[{ i,{c},{},{} }] = normalization:forward(trainData.x[{ i,{c},{},{} }])
+   end
+   for i = 1,valData.size do
+      valData.x[{ i,{c},{},{} }] = normalization:forward(valData.x[{ i,{c},{},{} }])
+   end
+   for i = 1,testData.size do
+      testData.x[{ i,{c},{},{} }] = normalization:forward(testData.x[{ i,{c},{},{} }])
+   end
+end
+
+
+-- Normalize all channels locally:
+for i = 1,trainData.size do
+   trainData.y[{i,{1},{},{}}] = normalization:forward(trainData.y[{i,{1},{},{}}])
+end
+for i = 1,valData.size do
+   valData.y[{ i,{1},{},{}}] = normalization:forward(valData.y[{i,{1},{},{}}])
+end
+for i = 1,testData.size do
+   testData.y[{ i,{1},{},{}}] = normalization:forward(testData.y[{i,{1},{},{}}])
+end
+
 
  ----------------------------------------------------------------------
  print(sys.COLORS.red ..  '==> verify statistics')
