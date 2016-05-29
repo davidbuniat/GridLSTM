@@ -192,7 +192,7 @@ local function getPreviousState(step, state, zeroTensor, input_size_x, backward)
   local prev_h_x, prev_c_x, prev_h_y, prev_c_y
 
   -- No input from edges of x
-  if state[step-c] and step%input_size_x > 1 then
+  if state[step-c] and step%input_size_x ~= 1 then
     prev_c_x = state[step-c][1]
     prev_h_x = state[step-c][2]
   else

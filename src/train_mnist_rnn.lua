@@ -19,9 +19,9 @@ torch.manualSeed(opt.seed)
 nngraph.setDebug(false)
 
 -- hyper-parameters 
-p_size = 1
-input_size_x = 28
-input_size_y = 28
+p_size = 3
+input_size_x = 7
+input_size_y = 7
 input_k = p_size * p_size
 rnn_size = 100
 hiddenLayer = 4096
